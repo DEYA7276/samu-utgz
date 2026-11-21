@@ -10,7 +10,7 @@ from app.main import app
 
 @app.middleware("http")
 async def ensure_api_prefix(request: Request, call_next):
-    p = request.url.path
-    if not p.startswith("/api/") and not p.startswith("/descargar/") and p not in ("/", "/healthz", "/index.html"):
-        request.scope["path"] = "/api" + p
+    p = request.scope.get("path", "")
+    if p and not p.startswith("/api/") and not p.startswith("/descargar/") and p not in ("/", "/healthz", "/index.html"):
+        request.scope["path"] = "/api/" + p.lstrip("/")
     return await call_next(request)

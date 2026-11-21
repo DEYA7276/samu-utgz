@@ -1,16 +1,16 @@
 {
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api"
+      "source": "/api/:path*",
+      "destination": "/api/index.py"
     },
     {
-      "source": "/descargar/(.*)",
-      "destination": "/api"
+      "source": "/descargar/:path*",
+      "destination": "/api/index.py"
     },
     {
       "source": "/healthz",
-      "destination": "/api"
+      "destination": "/api/index.py"
     },
     {
       "source": "/(.*)",
