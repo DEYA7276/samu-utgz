@@ -15,7 +15,7 @@ try:
     PRIVATE.mkdir(parents=True, exist_ok=True)
 except Exception:
     pass
-DB_URL = os.getenv('DATABASE_URL') or os.getenv('POSTGRES_URL') or os.getenv('POSTGRES_URL_NON_POOLING') or os.getenv('POSTGRES_PRISMA_URL') or f'sqlite:///{PRIVATE / "samu.sqlite3"}'
+DB_URL = os.getenv('DATABASE_URL') or os.getenv('POSTGRES_URL') or os.getenv('STORAGE_URL') or os.getenv('POSTGRES_URL_NON_POOLING') or os.getenv('POSTGRES_PRISMA_URL') or f'sqlite:///{PRIVATE / "samu.sqlite3"}'
 if DB_URL.startswith('postgres://'):
     DB_URL = DB_URL.replace('postgres://', 'postgresql+psycopg://', 1)
 elif DB_URL.startswith('postgresql://'):
