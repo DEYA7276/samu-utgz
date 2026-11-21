@@ -1,0 +1,13 @@
+SAMU V2 | SISTEMA DE ATENCIÓN MÉDICA UNIVERSITARIA
+
+1. Leer README.md.
+2. Para pruebas locales usar Python 3.12, crear entorno, instalar requirements.txt.
+3. Inicializar cuenta administrativa con python -m app.cli create-admin --email correo@ejemplo.edu.mx --name "Enfermería".
+4. Ejecutar uvicorn app.main:app --reload.
+5. Abrir http://127.0.0.1:8000.
+6. Para no abrir el servidor manualmente en cada uso, instalarlo UNA VEZ en un servidor/hosting permanente con Docker y Caddy (ver README.md y deploy/).
+7. Configurar SMTP para envío real de canalizaciones por correo; el correo de alumnos se registra en Enfermería.
+8. Aplicación Android: revisar android_flutter/README.md para generar APK; iOS: usar PWA desde Safari.
+9. Nunca probar con nombres, firmas o información clínica de las fotos reales.
+
+IMPORTANTE: Versión en desarrollo. Se requiere validación con Enfermería, autorización institucional y auditoría de privacidad/seguridad antes de operación real.

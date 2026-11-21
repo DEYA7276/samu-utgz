@@ -1,0 +1,15 @@
+.env
+.venv/
+.vercel/
+__pycache__/
+*.pyc
+.pytest_cache/
+private/*
+!private/.gitkeep
+android_flutter/android/
+android_flutter/ios/
+android_flutter/.dart_tool/
+android_flutter/build/
+*.apk
+*.ipa
+.DS_Store

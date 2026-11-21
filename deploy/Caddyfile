@@ -1,0 +1,9 @@
+{$SAMU_DOMAIN} {
+  encode gzip zstd
+  reverse_proxy api:8000
+  request_body { max_size 3MB }
+  log {
+    output stdout
+    format console
+  }
+}

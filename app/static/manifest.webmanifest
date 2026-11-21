@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "SAMU · Enfermería UTGZ",
+  "short_name": "SAMU",
+  "description": "Sistema de Atención Médica Universitaria",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f3f6f2",
+  "theme_color": "#28684f",
+  "icons": [
+    {"src":"/static/assets/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"/static/assets/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}

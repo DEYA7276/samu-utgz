@@ -1,0 +1,17 @@
+name: samu_utgz
+version: 2.0.0+1
+description: Aplicación Android SAMU para Universidad Tecnológica de Gutiérrez Zamora
+publish_to: none
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  webview_flutter: ^4.10.0
+  url_launcher: ^6.3.0
+flutter:
+  uses-material-design: true
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
