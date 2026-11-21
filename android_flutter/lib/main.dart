@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-// Compila con --dart-define=SAMU_URL=https://TU-DOMINIO-HTTPS
-const samuUrl = String.fromEnvironment('SAMU_URL', defaultValue: '');
+// Dominio oficial HTTPS publicado en Vercel
+const samuUrl = String.fromEnvironment('SAMU_URL', defaultValue: 'https://samu-utgz.vercel.app');
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
