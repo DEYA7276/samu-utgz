@@ -69,6 +69,8 @@ def favicon():return FileResponse(STATIC/'assets/icon-192.png',media_type='image
 @app.get('/canalizaciones')
 @app.get('/inventario')
 @app.get('/contactos')
+@app.get('/api/index.py')
+@app.get('/api/index')
 def index():return FileResponse(STATIC/'index.html',headers={'Cache-Control':'no-cache, no-store, must-revalidate'})
 
 def db_session():
