@@ -39,6 +39,8 @@ async def security_headers(request:Request,call_next):
     if request.headers.get('content-length') and int(request.headers['content-length'])>3_000_000:
         return JSONResponse({'detail':'La solicitud supera 3 MB.'},status_code=413)
     response=await call_next(request)
+    response.headers['X-Debug-Path'] = request.url.path
+    response.headers['X-Debug-Matched'] = request.headers.get('x-matched-path', '')
     response.headers['X-Content-Type-Options']='nosniff'
     response.headers['X-Frame-Options']='DENY'
     response.headers['Referrer-Policy']='no-referrer'
