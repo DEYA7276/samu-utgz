@@ -1,6 +1,10 @@
 # SAMU · Sistema de Atención Médica Universitaria — UTGZ
 
-**Versión 2.0 · proyecto fuente de demostración funcional, pendiente de validación institucional.**
+[![Pipeline CI/CD](https://github.com/DEYA7276/samu-utgz/actions/workflows/deploy.yml/badge.svg)](https://github.com/DEYA7276/samu-utgz/actions)
+[![Vercel Deployment](https://img.shields.io/badge/Deployment-Vercel-black?logo=vercel)](https://samu-utgz.vercel.app)
+[![Version](https://img.shields.io/badge/Version-v2.0.0-28684F)](https://github.com/DEYA7276/samu-utgz)
+
+**Versión 2.0 · proyecto de desarrollo y despliegue continuo (DevOps) para la Universidad Tecnológica de Gutiérrez Zamora.**
 
 Diseñado para enfermería de la Universidad Tecnológica de Gutiérrez Zamora. Se tomaron como referencia principal las cuatro fotos de formatos físicos recibidas del personal: **ficha médica, bitácora FOR-23-04a, canalización externa FOR-23-05 e inventario por cuatrimestre**. **No contiene registros reales copiados de las fotografías**.
 
