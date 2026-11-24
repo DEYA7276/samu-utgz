@@ -1404,6 +1404,22 @@ def put_contact(ident:int,d:dict,current=Depends(requires_admin),db=Depends(db_s
     except IntegrityError:db.rollback();bad('El correo ya pertenece a otro contacto.',409)
     return {'ok':True}
 
+@app.delete('/api/contactos/{ident}')
+def delete_contact(ident:int,current=Depends(requires_admin),db=Depends(db_session)):
+    a=db.get(Contact,ident)
+    if not a:bad('Contacto no encontrado.',404)
+    # Si tiene registros vinculados en bitácora de envíos, lo desactivamos para preservar integridad
+    has_logs = db.scalars(select(MailLog).where(MailLog.contact_id==ident)).first()
+    if has_logs:
+        a.activo = False
+        audit(db,current[0].id,'desactivar_contacto','destinatarios',a.id)
+        db.commit()
+        return {'ok':True,'message':'El contacto cuenta con historial de envíos de canalizaciones y fue desactivado para preservar la bitácora.'}
+    db.delete(a)
+    audit(db,current[0].id,'eliminar_contacto','destinatarios',ident)
+    db.commit()
+    return {'ok':True}
+
 @app.post('/api/canalizaciones/{ident}/enviar')
 def send_referral(ident:int,d:dict,current=Depends(authenticated),db=Depends(db_session)):
     if not mailer.has_smtp():bad('Configura SMTP_HOST y SMTP_FROM para enviar correos reales.',503)
