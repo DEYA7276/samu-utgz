@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // Dominio oficial HTTPS publicado en Vercel
@@ -50,7 +51,16 @@ class _SamuWebState extends State<SamuWeb> {
   @override
   void initState() {
     super.initState();
-    web = WebViewController()
+    final params = const PlatformWebViewControllerCreationParams();
+    final controller = WebViewController.fromPlatformCreationParams(params);
+
+    if (controller.platform is AndroidWebViewController) {
+      AndroidWebViewController.enableDebugging(false);
+      final androidController = controller.platform as AndroidWebViewController;
+      androidController.setMediaPlaybackRequiresUserGesture(false);
+    }
+
+    controller
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFFF3F6F2))
       ..setNavigationDelegate(NavigationDelegate(
@@ -76,6 +86,8 @@ class _SamuWebState extends State<SamuWeb> {
         },
       ))
       ..loadRequest(Uri.parse(samuUrl).replace(path: '/', query: null, fragment: null));
+
+    web = controller;
   }
 
   Future<bool> goBack() async {
