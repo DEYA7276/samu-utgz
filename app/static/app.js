@@ -27,7 +27,9 @@ const S={
   importPreview:null,
   importFile:null,
   month:(()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`})(),
-  dark:localStorage.getItem('samu-theme')==='dark'
+  dark:localStorage.getItem('samu-theme')==='dark',
+  isOnline:navigator.onLine,
+  syncPendingCount:0
 };
 const PROGRAMAS_UTGZ=['TSU en Administración, área Capital Humano','TSU en Administración, área Formulación y Evaluación de Proyectos','TSU en Agricultura Sustentable y Protegida','TSU en Contaduría','TSU en Energías Renovables','TSU en Gastronomía','TSU en Mantenimiento, área Industrial','TSU en Mecatrónica, área Automatización','TSU en Procesos Alimentarios','TSU en Tecnologías de la Información, área Desarrollo de Software Multiplataforma','TSU en Tecnologías de la Información, área Infraestructura de Redes Digitales','TSU en Turismo, área Hotelería','Ingeniería en Agricultura Sustentable y Protegida','Ingeniería en Energías Renovables','Ingeniería en Mantenimiento Industrial','Ingeniería en Mecatrónica','Ingeniería en Procesos Bioalimentarios','Ingeniería en Redes Inteligentes y Ciberseguridad','Ingeniería en Desarrollo y Gestión de Software','Licenciatura en Gestión del Capital Humano','Licenciatura en Innovación de Negocios y Mercadotecnia','Licenciatura en Gestión y Desarrollo Turístico'];
 document.documentElement.dataset.theme=S.dark?'dark':'light';
@@ -94,14 +96,184 @@ const currentQuarter=()=>{const d=new Date(),m=d.getMonth();return `${['ENE-ABR'
 const nowTime=()=>new Date().toTimeString().slice(0,5);
 function referralHeaderText(date=nowDate()){const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(date);if(!m)return '';return `Código: FOR-${m[1].slice(-2)}-${m[2]} · REV. 01 · Emisión: ${m[3]}/${m[2]}/${m[1].slice(-2)}`;}
 const toast=(message,error=false)=>{let t=$('#toast');if(!t)return;t.textContent=message;t.className=error?'error':'';t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',5200)};
+
+/* === MOTOR OFFLINE & INDEXEDDB DE SAMU === */
+const OfflineDB = {
+  dbName: 'SAMU_OFFLINE_STORE',
+  dbVersion: 1,
+  db: null,
+  async open(){
+    if(this.db) return this.db;
+    return new Promise((resolve, reject)=>{
+      const req = indexedDB.open(this.dbName, this.dbVersion);
+      req.onupgradeneeded = e => {
+        const d = e.target.result;
+        if(!d.objectStoreNames.contains('sync_queue')){
+          d.createObjectStore('sync_queue', {keyPath: 'id', autoIncrement: true});
+        }
+        if(!d.objectStoreNames.contains('offline_cache')){
+          d.createObjectStore('offline_cache', {keyPath: 'key'});
+        }
+      };
+      req.onsuccess = e => { this.db = e.target.result; resolve(this.db); };
+      req.onerror = e => reject(e.target.error);
+    });
+  },
+  async addQueue(endpoint, method, payload, description){
+    const db = await this.open();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction('sync_queue', 'readwrite');
+      const store = tx.objectStore('sync_queue');
+      const item = {
+        endpoint,
+        method,
+        payload,
+        description,
+        createdAt: new Date().toISOString()
+      };
+      const req = store.add(item);
+      req.onsuccess = () => {
+        updateSyncBadge();
+        resolve(req.result);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  },
+  async getQueue(){
+    const db = await this.open();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction('sync_queue', 'readonly');
+      const store = tx.objectStore('sync_queue');
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+  },
+  async removeQueue(id){
+    const db = await this.open();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction('sync_queue', 'readwrite');
+      const store = tx.objectStore('sync_queue');
+      const req = store.delete(id);
+      req.onsuccess = () => {
+        updateSyncBadge();
+        resolve();
+      };
+      req.onerror = () => reject(req.error);
+    });
+  },
+  async setCache(key, data){
+    try {
+      const db = await this.open();
+      const tx = db.transaction('offline_cache', 'readwrite');
+      tx.objectStore('offline_cache').put({key, data, updated: new Date().toISOString()});
+    } catch {}
+  },
+  async getCache(key){
+    try {
+      const db = await this.open();
+      return new Promise((resolve)=>{
+        const tx = db.transaction('offline_cache', 'readonly');
+        const req = tx.objectStore('offline_cache').get(key);
+        req.onsuccess = () => resolve(req.result?.data ?? null);
+        req.onerror = () => resolve(null);
+      });
+    } catch { return null; }
+  }
+};
+
+async function updateSyncBadge(){
+  try {
+    const queue = await OfflineDB.getQueue();
+    S.syncPendingCount = queue.length;
+    renderOfflineStatus();
+  } catch {}
+}
+
+function renderOfflineStatus(){
+  const bar = $('#offline-bar');
+  if(!bar) return;
+  if(!navigator.onLine){
+    bar.style.display = 'flex';
+    bar.className = 'offline-banner';
+    bar.innerHTML = `<span>⚠️ Modo sin conexión a Internet (Offline). Las consultas y registros se guardan localmente.</span>${S.syncPendingCount>0?`<span class="sync-badge">${S.syncPendingCount} pendiente(s) por sincronizar</span>`:''}`;
+  } else if(S.syncPendingCount > 0){
+    bar.style.display = 'flex';
+    bar.className = 'offline-banner online-syncing';
+    bar.innerHTML = `<span>📡 Conexión restablecida. Tienes <b>${S.syncPendingCount}</b> registro(s) pendiente(s) de sincronizar.</span><button type="button" id="btn-sync-now">Sincronizar ahora</button>`;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+async function syncPendingQueue(){
+  if(!navigator.onLine) {
+    toast('No hay conexión a Internet para sincronizar todavía.', true);
+    return;
+  }
+  const queue = await OfflineDB.getQueue();
+  if(!queue.length) return;
+  const bar = $('#offline-bar');
+  if(bar){
+    bar.className = 'offline-banner online-syncing';
+    bar.innerHTML = `<span>⏳ Sincronizando registros pendientes con el servidor (${queue.length} restantes)…</span>`;
+  }
+  let synced = 0;
+  for(const item of queue){
+    try {
+      await api(item.endpoint, {method: item.method, data: item.payload});
+      await OfflineDB.removeQueue(item.id);
+      synced++;
+    } catch (err) {
+      console.warn('Error sincronizando item:', item, err);
+      // Si fue error de duplicado o regla de negocio, lo quitamos para no atorar la cola
+      if(err.message?.includes('ya está registrado') || err.message?.includes('inexistente')){
+        await OfflineDB.removeQueue(item.id);
+      }
+    }
+  }
+  await updateSyncBadge();
+  if(synced > 0){
+    toast(`¡Sincronización completada! ${synced} registro(s) subido(s) al servidor con éxito.`);
+    if(S.user && S.view !== 'inicio') await view(S.view);
+  }
+}
+
+window.addEventListener('online', ()=>{
+  S.isOnline = true;
+  updateSyncBadge();
+  toast('¡Conexión a Internet restablecida!');
+  syncPendingQueue();
+});
+window.addEventListener('offline', ()=>{
+  S.isOnline = false;
+  renderOfflineStatus();
+  toast('Sin conexión a Internet. Activando Modo Offline automático.', true);
+});
 async function api(path,{method='GET',data,headers={},body=null}={}){
  const opts={method,credentials:'same-origin',headers:{...headers}};
  if(data!==undefined){opts.headers['Content-Type']='application/json';opts.body=JSON.stringify(data)}
  else if(body!==null){opts.body=body}
  if(!['GET','HEAD'].includes(method)&&S.csrf)opts.headers['X-CSRF-Token']=S.csrf;
- let res;try{res=await fetch(path,opts)}catch{throw Error('No se pudo conectar al servidor. Verifica tu conexión a Internet.')}
+ let res;
+ try{
+   res=await fetch(path,opts);
+ }catch(err){
+   // Si falla la red en petición GET, intentar leer del cache offline
+   if(['GET','HEAD'].includes(method)){
+     const cached = await OfflineDB.getCache(path);
+     if(cached !== null) {
+       return cached;
+     }
+   }
+   throw Error('No se pudo conectar al servidor. Modo sin conexión activo.');
+ }
  const raw=await res.text();let json={};try{json=raw?JSON.parse(raw):{}}catch{json={detail:'El servidor no devolvió una respuesta válida.'}}
  if(!res.ok){if(res.status===401&&S.user){S.user=null;S.csrf='';view('login')}throw Error(typeof json.detail==='string'?json.detail:'Ocurrió un error en la solicitud.')}
+ // Si es petición GET exitosa, guardar en cache offline para emergencias sin internet
+ if(['GET','HEAD'].includes(method)){
+   OfflineDB.setCache(path, json);
+ }
  return json;
 }
 function field(name,label,type='text',opts={}){const val=S.draft[name]??opts.value??'';const {required=false,full=false,placeholder='',max=255,readonly=false}=opts;const base=`name="${escapeHtml(name)}" ${required?'required':''} ${readonly?'readonly':''} maxlength="${max}"`;
@@ -285,7 +457,10 @@ function menu(){
  ];
  return `<aside class="sidebar"><a class="brand" href="/enfermeria" data-view="dashboard"><img src="${logo}" alt="Samu"><span><strong>SAMU</strong><small>Enfermería UTGZ</small></span></a><nav class="side-menu">${entries.map(([id,iconName,label])=>`<button data-view="${id}" class="${S.view===id?'active':''}"><span class="nav-icon" aria-hidden="true">${icon(iconName,18)}</span>${label}</button>`).join('')}<button id="logout"><span class="nav-icon" aria-hidden="true">${icon('logout',18)}</span>Cerrar sesión</button></nav><div class="side-footer">Los expedientes requieren autenticación. Cierra sesión al terminar.</div></aside>`
 }
-function adminLayout(content,title,sub){return `<div class="shell">${menu()}<main class="workarea"><div class="topline"><div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(sub)}</p></div><div class="topline-actions">${themeToggle()}<span class="user-pill">${escapeHtml(S.user?.name||'Enfermería')}</span></div></div>${content}</main></div>`}
+function adminLayout(content,title,sub){
+  const syncBtn = S.syncPendingCount > 0 ? `<button type="button" class="sync-badge" id="btn-sync-now" style="cursor:pointer" title="Haga clic para sincronizar registros con el servidor">⚠️ ${S.syncPendingCount} pendiente(s)</button>` : '';
+  return `<div class="shell">${menu()}<main class="workarea"><div class="topline"><div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(sub)}</p></div><div class="topline-actions">${syncBtn}${themeToggle()}<span class="user-pill">${escapeHtml(S.user?.name||'Enfermería')}</span></div></div>${content}</main></div>`
+}
 function table(headers,rows){return `<div class="table-wrap"><table class="data-table"><thead><tr>${headers.map(h=>`<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.join(''):`<tr><td colspan="${headers.length}"><div class="empty">No hay registros para mostrar.</div></td></tr>`}</tbody></table></div>`}
 
 /* Alertas Médicas Estructuradas */
@@ -1214,6 +1389,7 @@ document.addEventListener('click',async e=>{
  if(t.id==='filter-bitacora'){try{S.month=$('#bitacora-mes').value;if(!S.month)throw Error('Selecciona el mes que quieres consultar.');S.rows=await api(`/api/bitacora?mes=${encodeURIComponent(S.month)}`);const section=t.closest('.paper'),tableWrap=section?.querySelector('.table-wrap');if(tableWrap)tableWrap.outerHTML=attentionTable(S.rows)}catch(err){parseErr(err)}return}
  if(t.dataset.contactEdit){S.editContact=S.contacts.find(r=>String(r.id)===t.dataset.contactEdit);$('#app').innerHTML=contactos(S.contacts);scrollTo({top:0,behavior:'smooth'});return}
  if(t.id==='clear-contact'){S.editContact=null;$('#app').innerHTML=contactos(S.contacts);return}
+ if(t.id==='btn-sync-now'){syncPendingQueue();return}
  if(t.dataset.contactToggle){const a=S.contacts.find(r=>String(r.id)===t.dataset.contactToggle);if(!a)return;try{await api(`/api/contactos/${a.id}`,{method:'PUT',data:{...a,activo:!a.activo}});toast('Destinatario actualizado.');view('contactos')}catch(err){parseErr(err)}return}
  if(t.dataset.contactDelete){const a=S.contacts.find(r=>String(r.id)===t.dataset.contactDelete);if(!a)return;if(!confirm(`¿Deseas eliminar a "${a.nombre}" (${a.correo}) de la lista de destinatarios?`))return;try{const res=await api(`/api/contactos/${a.id}`,{method:'DELETE'});toast(res?.message||'Correo eliminado de la base de datos.');view('contactos')}catch(err){parseErr(err)}return}
 });
@@ -1319,17 +1495,117 @@ document.addEventListener('submit',async e=>{
     const d=obj(form);
     d.firma_usuario=S.signatures.firma_usuario;
     d.firma_enfermeria=S.signatures.firma_enfermeria;
-    await api('/api/bitacora',{method:'POST',data:d});
+    if(!navigator.onLine){
+      await OfflineDB.addQueue('/api/bitacora','POST',d,`Consulta de ${d.nombre||'paciente'}`);
+      S.bitacoraDraft=null;
+      delete S.draft.firma_usuario;
+      delete S.draft.firma_enfermeria;
+      S.bitacoraTab='list';
+      toast('💾 Atención guardada localmente (Modo Offline). Se sincronizará al volver la conexión.');
+      await view('bitacora');
+      return;
+    }
+    try{
+      await api('/api/bitacora',{method:'POST',data:d});
+      toast('Atención guardada en bitácora');
+    }catch(err){
+      if(!navigator.onLine || err.message?.includes('Modo sin conexión') || err.message?.includes('conectar al servidor')){
+        await OfflineDB.addQueue('/api/bitacora','POST',d,`Consulta de ${d.nombre||'paciente'}`);
+        toast('💾 Sin conexión: Atención guardada localmente. Se sincronizará automáticamente.');
+      } else throw err;
+    }
     S.bitacoraDraft=null;
     delete S.draft.firma_usuario;
     delete S.draft.firma_enfermeria;
     S.bitacoraTab='list';
-    toast('Atención guardada en bitácora');
     await view('bitacora');
   }
-  if(form.id==='referral-form'){const d=obj(form);d.consentimiento_informado=!!form.querySelector('[name=consentimiento_informado]').checked;d.firma_responsable=S.signatures.firma_responsable;d.firma_consentimiento=S.signatures.firma_consentimiento;await api('/api/canalizaciones',{method:'POST',data:d});S.referralDraft=null;delete S.draft.firma_responsable;delete S.draft.firma_consentimiento;S.referralTab='list';toast('Canalización guardada. Ya puedes generar PDF y enviarla.');await view('canalizaciones')}
-  if(form.id==='inventory-form'){const d=obj(form);d.cantidad_inicio=Number(d.cantidad_inicio);d.cantidad_fin=Number(d.cantidad_fin);d.stock_minimo=Number(d.stock_minimo||3);const id=form.dataset.id;if(id){await api(`/api/inventario/${id}`,{method:'PUT',data:d})}else{await api('/api/inventario',{method:'POST',data:d})}S.editInventory=null;toast('Inventario guardado');await view('inventario')}
-  if(form.id==='contact-form'){const d=obj(form);const id=form.dataset.id;if(id){await api(`/api/contactos/${id}`,{method:'PUT',data:{...d,activo:S.editContact?.activo??true}});toast('Correo actualizado en la base de datos')}else{await api('/api/contactos',{method:'POST',data:d});toast('Correo guardado en la base de datos')}S.editContact=null;await view('contactos')}
+  if(form.id==='referral-form'){
+    const d=obj(form);
+    d.consentimiento_informado=!!form.querySelector('[name=consentimiento_informado]').checked;
+    d.firma_responsable=S.signatures.firma_responsable;
+    d.firma_consentimiento=S.signatures.firma_consentimiento;
+    if(!navigator.onLine){
+      await OfflineDB.addQueue('/api/canalizaciones','POST',d,`Canalización de ${d.nombre_completo||'paciente'}`);
+      S.referralDraft=null;
+      delete S.draft.firma_responsable;
+      delete S.draft.firma_consentimiento;
+      S.referralTab='list';
+      toast('💾 Canalización guardada localmente (Modo Offline). Se sincronizará al volver la conexión.');
+      await view('canalizaciones');
+      return;
+    }
+    try{
+      await api('/api/canalizaciones',{method:'POST',data:d});
+      toast('Canalización guardada. Ya puedes generar PDF y enviarla.');
+    }catch(err){
+      if(!navigator.onLine || err.message?.includes('Modo sin conexión') || err.message?.includes('conectar al servidor')){
+        await OfflineDB.addQueue('/api/canalizaciones','POST',d,`Canalización de ${d.nombre_completo||'paciente'}`);
+        toast('💾 Sin conexión: Canalización guardada localmente.');
+      } else throw err;
+    }
+    S.referralDraft=null;
+    delete S.draft.firma_responsable;
+    delete S.draft.firma_consentimiento;
+    S.referralTab='list';
+    await view('canalizaciones');
+  }
+  if(form.id==='inventory-form'){
+    const d=obj(form);
+    d.cantidad_inicio=Number(d.cantidad_inicio);
+    d.cantidad_fin=Number(d.cantidad_fin);
+    d.stock_minimo=Number(d.stock_minimo||3);
+    const id=form.dataset.id;
+    if(!navigator.onLine){
+      const ep = id ? `/api/inventario/${id}` : '/api/inventario';
+      const m = id ? 'PUT' : 'POST';
+      await OfflineDB.addQueue(ep, m, d, `Insumo ${d.medicamento_material}`);
+      S.editInventory=null;
+      toast('💾 Insumo guardado localmente (Modo Offline).');
+      await view('inventario');
+      return;
+    }
+    try{
+      if(id){await api(`/api/inventario/${id}`,{method:'PUT',data:d})}
+      else{await api('/api/inventario',{method:'POST',data:d})}
+      toast('Inventario guardado');
+    }catch(err){
+      if(!navigator.onLine || err.message?.includes('Modo sin conexión') || err.message?.includes('conectar al servidor')){
+        const ep = id ? `/api/inventario/${id}` : '/api/inventario';
+        const m = id ? 'PUT' : 'POST';
+        await OfflineDB.addQueue(ep, m, d, `Insumo ${d.medicamento_material}`);
+        toast('💾 Insumo guardado localmente.');
+      } else throw err;
+    }
+    S.editInventory=null;
+    await view('inventario');
+  }
+  if(form.id==='contact-form'){
+    const d=obj(form);
+    const id=form.dataset.id;
+    if(!navigator.onLine){
+      const ep = id ? `/api/contactos/${id}` : '/api/contactos';
+      const m = id ? 'PUT' : 'POST';
+      await OfflineDB.addQueue(ep, m, {...d,activo:S.editContact?.activo??true}, `Contacto ${d.nombre}`);
+      S.editContact=null;
+      toast('💾 Correo guardado localmente (Modo Offline).');
+      await view('contactos');
+      return;
+    }
+    try{
+      if(id){await api(`/api/contactos/${id}`,{method:'PUT',data:{...d,activo:S.editContact?.activo??true}});toast('Correo actualizado en la base de datos')}
+      else{await api('/api/contactos',{method:'POST',data:d});toast('Correo guardado en la base de datos')}
+    }catch(err){
+      if(!navigator.onLine || err.message?.includes('Modo sin conexión') || err.message?.includes('conectar al servidor')){
+        const ep = id ? `/api/contactos/${id}` : '/api/contactos';
+        const m = id ? 'PUT' : 'POST';
+        await OfflineDB.addQueue(ep, m, {...d,activo:S.editContact?.activo??true}, `Contacto ${d.nombre}`);
+        toast('💾 Correo guardado localmente.');
+      } else throw err;
+    }
+    S.editContact=null;
+    await view('contactos');
+  }
   if(form.id==='send-referral-form'){const ids=[...form.querySelectorAll('[name=contact_ids]:checked')].map(x=>Number(x.value));if(!ids.length)throw Error('Selecciona al menos un correo guardado.');if(!confirm(`¿Enviar documento médico a ${ids.length} destinatario(s) autorizado(s)?`))return;const r=await api(`/api/canalizaciones/${form.dataset.id}/enviar`,{method:'POST',data:{contact_ids:ids}});toast(r.ok?'Servidor de correo aceptó el mensaje.':'Algunos correos no pudieron enviarse',!r.ok);await view('canalizaciones')}
  }catch(err){parseErr(err)}finally{if(btn&&btn.isConnected)btn.disabled=false}
 });
@@ -1359,7 +1635,24 @@ document.addEventListener('drop',async e=>{
 
 (async()=>{
  if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
- try{const r=await api('/api/session');S.user=r.user;S.csrf=r.csrf}catch{}
+ updateSyncBadge();
+ try{
+   const r=await api('/api/session');
+   S.user=r.user;
+   S.csrf=r.csrf;
+   if(r.user) localStorage.setItem('samu-cached-user', JSON.stringify({user: r.user, csrf: r.csrf}));
+ }catch{
+   // Si estamos sin conexión, recuperar la última sesión válida para permitir trabajar en modo offline
+   const cached = localStorage.getItem('samu-cached-user');
+   if(cached){
+     try {
+       const parsed = JSON.parse(cached);
+       S.user = parsed.user;
+       S.csrf = parsed.csrf;
+     } catch {}
+   }
+ }
+ renderOfflineStatus();
  const path = location.pathname;
  if(path === '/alumno') view('alumno');
  else if(path === '/importar') { if(S.user) view('importar'); else view('login'); }
