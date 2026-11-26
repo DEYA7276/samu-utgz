@@ -191,6 +191,13 @@ def init_db():
             nurse_cols = [r[1] for r in conn.execute(text('PRAGMA table_info(personal)')).fetchall()]
             if 'google_sub' not in nurse_cols:
                 conn.execute(text('ALTER TABLE personal ADD COLUMN google_sub VARCHAR(100)'))
+            student_cols = [r[1] for r in conn.execute(text('PRAGMA table_info(fichas_medicas)')).fetchall()]
+            if 'qr_token' not in student_cols:
+                conn.execute(text('ALTER TABLE fichas_medicas ADD COLUMN qr_token VARCHAR(64)'))
+            if 'observaciones_correccion' not in student_cols:
+                conn.execute(text('ALTER TABLE fichas_medicas ADD COLUMN observaciones_correccion VARCHAR(500) DEFAULT ""'))
+            if 'status_updated' not in student_cols:
+                conn.execute(text('ALTER TABLE fichas_medicas ADD COLUMN status_updated TIMESTAMP'))
     else:
         with engine.begin() as conn:
             try:
@@ -199,6 +206,12 @@ def init_db():
                 pass
             try:
                 conn.execute(text('ALTER TABLE personal ADD COLUMN IF NOT EXISTS google_sub VARCHAR(100)'))
+            except Exception:
+                pass
+            try:
+                conn.execute(text('ALTER TABLE fichas_medicas ADD COLUMN IF NOT EXISTS qr_token VARCHAR(64)'))
+                conn.execute(text('ALTER TABLE fichas_medicas ADD COLUMN IF NOT EXISTS observaciones_correccion VARCHAR(500) DEFAULT \'\''))
+                conn.execute(text('ALTER TABLE fichas_medicas ADD COLUMN IF NOT EXISTS status_updated TIMESTAMP WITH TIME ZONE'))
             except Exception:
                 pass
 
