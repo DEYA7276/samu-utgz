@@ -795,8 +795,11 @@ def dashboard(current=Depends(authenticated),db=Depends(db_session)):
     today_str = datetime.now().strftime('%Y-%m-%d')
     this_month_str = datetime.now().strftime('%Y-%m')
 
-    pendientes = db.scalar(select(func.count(Student.id)).where(Student.estado=='pendiente')) or 0
+    pendientes_revision = db.scalar(select(func.count(Student.id)).where(or_(Student.estado=='pendiente', Student.estado=='pendiente_revision'))) or 0
+    en_revision = db.scalar(select(func.count(Student.id)).where(Student.estado=='en_revision')) or 0
+    requiere_correccion = db.scalar(select(func.count(Student.id)).where(Student.estado=='requiere_correccion')) or 0
     validadas = db.scalar(select(func.count(Student.id)).where(Student.estado=='validada')) or 0
+    total_fichas = db.scalar(select(func.count(Student.id))) or 0
     total_atenciones = db.scalar(select(func.count(Attention.id))) or 0
     total_canalizaciones = db.scalar(select(func.count(Referral.id))) or 0
 
@@ -864,9 +867,25 @@ def dashboard(current=Depends(authenticated),db=Depends(db_session)):
             'total': count
         })
 
+    fichas_recientes_revision = [
+        {
+            'id': s.id,
+            'folio': s.folio,
+            'nombre': s.nombre_aspirante,
+            'matricula': s.matricula or 'Pendiente',
+            'estado': 'pendiente_revision' if s.estado in ('pendiente','pendiente_revision') else s.estado,
+            'fecha': s.created.strftime('%Y-%m-%d') if s.created else ''
+        }
+        for s in db.scalars(select(Student).where(or_(Student.estado=='pendiente', Student.estado=='pendiente_revision', Student.estado=='en_revision', Student.estado=='requiere_correccion')).order_by(desc(Student.id)).limit(5)).all()
+    ]
+
     return {
-        'pendientes': pendientes,
+        'pendientes': pendientes_revision,
+        'en_revision': en_revision,
+        'requiere_correccion': requiere_correccion,
         'validadas': validadas,
+        'total_fichas': total_fichas,
+        'fichas_recientes_revision': fichas_recientes_revision,
         'atenciones': total_atenciones,
         'canalizaciones': total_canalizaciones,
         'insumos': total_insumos,

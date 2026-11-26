@@ -196,11 +196,11 @@ function renderOfflineStatus(){
   if(!navigator.onLine){
     bar.style.display = 'flex';
     bar.className = 'offline-banner';
-    bar.innerHTML = `<span>⚠️ Modo sin conexión a Internet (Offline). Las consultas y registros se guardan localmente.</span>${S.syncPendingCount>0?`<span class="sync-badge">${S.syncPendingCount} pendiente(s) por sincronizar</span>`:''}`;
+    bar.innerHTML = `<span>Modo sin conexión a Internet (Offline). Las consultas y registros se guardan localmente.</span>${S.syncPendingCount>0?`<span class="sync-badge">${S.syncPendingCount} pendiente(s) por sincronizar</span>`:''}`;
   } else if(S.syncPendingCount > 0){
     bar.style.display = 'flex';
     bar.className = 'offline-banner online-syncing';
-    bar.innerHTML = `<span>📡 Conexión restablecida. Tienes <b>${S.syncPendingCount}</b> registro(s) pendiente(s) de sincronizar.</span><button type="button" id="btn-sync-now">Sincronizar ahora</button>`;
+    bar.innerHTML = `<span>Conexión restablecida. Tienes <b>${S.syncPendingCount}</b> registro(s) pendiente(s) de sincronizar.</span><button type="button" id="btn-sync-now">Sincronizar ahora</button>`;
   } else {
     bar.style.display = 'none';
   }
@@ -216,7 +216,7 @@ async function syncPendingQueue(){
   const bar = $('#offline-bar');
   if(bar){
     bar.className = 'offline-banner online-syncing';
-    bar.innerHTML = `<span>⏳ Sincronizando registros pendientes con el servidor (${queue.length} restantes)…</span>`;
+    bar.innerHTML = `<span>Sincronizando registros pendientes con el servidor (${queue.length} restantes)…</span>`;
   }
   let synced = 0;
   for(const item of queue){
@@ -294,13 +294,13 @@ function badgeEstadoFicha(estado){
   switch(estado){
     case 'pendiente_revision':
     case 'pendiente':
-      return '<span class="pill pending">⏳ Pendiente de revisión</span>';
+      return '<span class="pill pending">Pendiente de revisión</span>';
     case 'en_revision':
-      return '<span class="pill" style="background:#e0f2fe;color:#0369a1">🔍 En revisión médica</span>';
+      return '<span class="pill" style="background:#e0f2fe;color:#0369a1">En revisión médica</span>';
     case 'requiere_correccion':
-      return '<span class="pill warn">⚠️ Requiere corrección</span>';
+      return '<span class="pill warn">Requiere corrección</span>';
     case 'validada':
-      return '<span class="pill" style="background:#dcfce7;color:#15803d">✅ Validada</span>';
+      return '<span class="pill" style="background:#dcfce7;color:#15803d">Validada</span>';
     default:
       return `<span class="pill">${escapeHtml(estado)}</span>`;
   }
@@ -353,7 +353,7 @@ function renderCredencialCard(data){
   const fechaActualizacion = data.status_updated ? new Date(data.status_updated).toLocaleString('es-MX', {dateStyle:'medium', timeStyle:'short'}) : 'Reciente';
   const obsHtml = (data.estado === 'requiere_correccion' && data.observaciones_correccion) ? `
     <div class="warning-banner" style="margin:16px 0;text-align:left">
-      <strong>⚠️ Observación de Enfermería:</strong><br>
+      <strong>Observación de Enfermería:</strong><br>
       ${escapeHtml(data.observaciones_correccion)}
       <p class="hint" style="margin-top:6px">Por favor acude al consultorio de Enfermería o comunícate con el área médica para actualizar este campo.</p>
     </div>
@@ -389,11 +389,11 @@ function renderCredencialCard(data){
         </div>
 
         <p class="hint" style="max-width:440px;margin:18px auto 0;line-height:1.5">
-          🔒 <b>Seguridad médica:</b> Este código QR NO contiene diagnósticos, alergias ni datos clínicos. Presenta esta credencial en la pantalla de tu celular al acudir al consultorio para que Enfermería escanee y abra tu expediente al instante.
+          <b>Seguridad médica:</b> Este código QR no contiene diagnósticos, alergias ni datos clínicos. Presenta esta credencial en la pantalla de tu celular al acudir al consultorio para que Enfermería escanee y abra tu expediente al instante.
         </p>
 
         <div class="actions" style="margin-top:22px;justify-content:center">
-          <button type="button" class="btn primary sm" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+          <button type="button" class="btn primary sm" onclick="window.print()">Imprimir o Guardar PDF</button>
           <button type="button" class="btn secondary sm" data-view="inicio">Volver al inicio</button>
         </div>
 
@@ -413,7 +413,6 @@ function renderQrScannerModal(){
       <div style="background:#fff;border-radius:24px;max-width:520px;width:100%;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.3)">
         <div style="background:var(--navy);color:#fff;padding:18px 22px;display:flex;align-items:center;justify-content:space-between">
           <div style="display:flex;align-items:center;gap:10px">
-            <span style="font-size:1.3rem">📷</span>
             <strong style="font-size:1.05rem">Escanear Credencial QR de Alumno</strong>
           </div>
           <button type="button" id="btn-close-scanner" style="background:transparent;border:0;color:#fff;font-size:1.5rem;cursor:pointer;line-height:1">&times;</button>
@@ -685,7 +684,7 @@ function menu(){
  return `<aside class="sidebar"><a class="brand" href="/enfermeria" data-view="dashboard"><img src="${logo}" alt="Samu"><span><strong>SAMU</strong><small>Enfermería UTGZ</small></span></a><nav class="side-menu">${entries.map(([id,iconName,label])=>`<button data-view="${id}" class="${S.view===id?'active':''}"><span class="nav-icon" aria-hidden="true">${icon(iconName,18)}</span>${label}</button>`).join('')}<button id="logout"><span class="nav-icon" aria-hidden="true">${icon('logout',18)}</span>Cerrar sesión</button></nav><div class="side-footer">Los expedientes requieren autenticación. Cierra sesión al terminar.</div></aside>`
 }
 function adminLayout(content,title,sub){
-  const syncBtn = S.syncPendingCount > 0 ? `<button type="button" class="sync-badge" id="btn-sync-now" style="cursor:pointer" title="Haga clic para sincronizar registros con el servidor">⚠️ ${S.syncPendingCount} pendiente(s)</button>` : '';
+  const syncBtn = S.syncPendingCount > 0 ? `<button type="button" class="sync-badge" id="btn-sync-now" style="cursor:pointer" title="Sincronizar registros con el servidor">${S.syncPendingCount} pendiente(s)</button>` : '';
   return `<div class="shell">${menu()}<main class="workarea"><div class="topline"><div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(sub)}</p></div><div class="topline-actions">${syncBtn}${themeToggle()}<span class="user-pill">${escapeHtml(S.user?.name||'Enfermería')}</span></div></div>${content}</main></div>`
 }
 function table(headers,rows){return `<div class="table-wrap"><table class="data-table"><thead><tr>${headers.map(h=>`<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.join(''):`<tr><td colspan="${headers.length}"><div class="empty">No hay registros para mostrar.</div></td></tr>`}</tbody></table></div>`}
@@ -708,9 +707,10 @@ function dashboard(d){
   const stats = [
     ['Atenciones hoy', d.atenciones_hoy??0, true],
     ['Atenciones del mes', d.atenciones_mes??0, false],
-    ['Alumnos atendidos (mes)', d.alumnos_atendidos_mes??0, false],
-    ['Fichas pendientes', d.pendientes??0, (d.pendientes||0)>0],
-    ['Canalizaciones (mes)', d.canalizaciones_mes??0, false]
+    ['Pendientes de revisión', d.pendientes??0, (d.pendientes||0)>0],
+    ['En revisión médica', d.en_revision??0, false],
+    ['Requiere corrección', d.requiere_correccion??0, (d.requiere_correccion||0)>0],
+    ['Fichas validadas', d.validadas??0, false]
   ];
 
   const maxGrafica = Math.max(1, ...(d.grafica_mensual||[]).map(g=>g.total));
@@ -737,9 +737,17 @@ function dashboard(d){
 
   const quickActions = `
     <div class="quick-grid">
+      <div class="quick-card" id="btn-dashboard-scan-qr" style="border:2px solid var(--sea);background:var(--mint);cursor:pointer">
+        <div class="quick-card-icon" style="background:#28684f;color:#fff">${icon('fichas',22)}</div>
+        <div><strong style="color:var(--navy)">Escanear Credencial QR</strong><small>Abrir cámara y localizar expediente</small></div>
+      </div>
       <div class="quick-card" data-view="bitacora" data-bitacora-tab="new">
         <div class="quick-card-icon">${icon('bitacora',22)}</div>
         <div><strong>Nueva atención</strong><small>Registrar en bitácora</small></div>
+      </div>
+      <div class="quick-card" data-view="fichas">
+        <div class="quick-card-icon">${icon('fichas',22)}</div>
+        <div><strong>Fichas médicas</strong><small>Revisar y gestionar estados</small></div>
       </div>
       <div class="quick-card" data-view="canalizaciones">
         <div class="quick-card-icon">${icon('canalizaciones',22)}</div>
@@ -748,10 +756,6 @@ function dashboard(d){
       <div class="quick-card" data-view="importar">
         <div class="quick-card-icon">${icon('importar',22)}</div>
         <div><strong>Importar alumnos</strong><small>Carga Excel o CSV</small></div>
-      </div>
-      <div class="quick-card" data-view="fichas">
-        <div class="quick-card-icon">${icon('fichas',22)}</div>
-        <div><strong>Fichas médicas</strong><small>Validar y consultar</small></div>
       </div>
       <div class="quick-card" data-view="inventario">
         <div class="quick-card-icon">${icon('inventario',22)}</div>
@@ -768,8 +772,17 @@ function dashboard(d){
       <td>${escapeHtml(a.motivo)}</td>
     </tr>`).join('');
 
+  const fichasRevisionRows = (d.fichas_recientes_revision||[]).map(f=>`
+    <tr>
+      <td><span style="font-family:monospace;font-weight:700">${escapeHtml(f.folio)}</span></td>
+      <td><b>${escapeHtml(f.nombre)}</b></td>
+      <td>${escapeHtml(f.matricula)}</td>
+      <td>${badgeEstadoFicha(f.estado)}</td>
+      <td><button class="btn sm secondary" data-ficha="${f.id}">Revisar</button></td>
+    </tr>`).join('');
+
   return adminLayout(`
-    <div class="stats">
+    <div class="stats" style="grid-template-columns:repeat(6,minmax(0,1fr))">
       ${stats.map(([label, n, isAccent])=>`
         <div class="stat ${isAccent?'accent':''}">
           <small>${label}</small>
@@ -782,35 +795,46 @@ function dashboard(d){
     <section class="paper">
       <div class="section-title">
         <div>
-          <h2>Accesos directos</h2>
-          <p class="hint">Operaciones frecuentes del servicio médico universitario</p>
+          <h2>Panel Operativo de Enfermería</h2>
+          <p class="hint">Acceso rápido a las funciones principales del consultorio universitario</p>
         </div>
       </div>
       ${quickActions}
     </section>
 
-    <div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:18px" class="dash-split">
+    <div style="display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px" class="dash-split">
       <section class="paper">
         <div class="section-title">
           <div>
-            <h2>Atenciones mensuales</h2>
-            <p class="hint">Actividad registrada en los últimos 6 meses</p>
+            <h2>Fichas médicas en proceso de revisión</h2>
+            <p class="hint">Alumnos que requieren validación o cambio de estado</p>
           </div>
+          <button data-view="fichas" class="btn sm secondary">Ver todas las fichas</button>
         </div>
-        <div class="chart-bar-wrap">${chartHtml}</div>
+        ${table(['Folio','Estudiante','Matrícula','Estado','Acción'], fichasRevisionRows ? [fichasRevisionRows] : [])}
       </section>
 
       <section class="paper">
         <div class="section-title">
           <div>
             <h2>Últimas atenciones registradas</h2>
-            <p class="hint">Consultas recientes en la bitácora</p>
+            <p class="hint">Consultas recientes en la bitácora médica</p>
           </div>
-          <button data-view="bitacora" data-bitacora-tab="list" class="btn sm secondary">Ver registros de bitácora</button>
+          <button data-view="bitacora" data-bitacora-tab="list" class="btn sm secondary">Ver bitácora</button>
         </div>
         ${table(['Fecha','Hora','Estudiante','Matrícula','Motivo'], recentAtt ? [recentAtt] : [])}
       </section>
     </div>
+
+    <section class="paper" style="margin-top:18px">
+      <div class="section-title">
+        <div>
+          <h2>Atenciones médicas mensuales</h2>
+          <p class="hint">Historial de consultas registradas en los últimos 6 meses</p>
+        </div>
+      </div>
+      <div class="chart-bar-wrap">${chartHtml}</div>
+    </section>
   `, 'Dashboard de Enfermería', 'Estadísticas en tiempo real, alertas y accesos rápidos');
 }
 
@@ -823,7 +847,7 @@ function fichas(rows){
           <p class="hint">Formularios clínicos y expedientes validados</p>
         </div>
         <div class="actions">
-          <button type="button" id="btn-open-qr-scanner" class="btn primary sm">📷 Escanear QR</button>
+          <button type="button" id="btn-open-qr-scanner" class="btn primary sm">Escanear QR</button>
           <button data-view="importar" class="btn green sm">${icon('importar',16)} Importar alumnos (Excel/CSV)</button>
         </div>
       </div>
@@ -919,7 +943,7 @@ function ficheDetail(a){
           <p class="hint">Estado actual: ${badgeEstadoFicha(a.estado)} · Token QR: <code style="background:#eaf2ee;padding:3px 8px;border-radius:6px">${escapeHtml(a.qr_token||'—')}</code></p>
         </div>
         <div class="actions">
-          <button type="button" class="btn secondary sm" id="btn-regenerar-qr" data-id="${a.id}">🔄 Regenerar Código QR</button>
+          <button type="button" class="btn secondary sm" id="btn-regenerar-qr" data-id="${a.id}">Regenerar Código QR</button>
         </div>
       </div>
 
@@ -927,10 +951,10 @@ function ficheDetail(a){
         <div class="form-grid">
           <label class="field">Asignar nuevo estado
             <select name="estado" id="select-estado-ficha">
-              <option value="pendiente_revision" ${['pendiente','pendiente_revision'].includes(a.estado)?'selected':''}>⏳ Pendiente de revisión</option>
-              <option value="en_revision" ${a.estado==='en_revision'?'selected':''}>🔍 En revisión médica</option>
-              <option value="requiere_correccion" ${a.estado==='requiere_correccion'?'selected':''}>⚠️ Requiere corrección</option>
-              <option value="validada" ${a.estado==='validada'?'selected':''}>✅ Validada</option>
+              <option value="pendiente_revision" ${['pendiente','pendiente_revision'].includes(a.estado)?'selected':''}>Pendiente de revisión</option>
+              <option value="en_revision" ${a.estado==='en_revision'?'selected':''}>En revisión médica</option>
+              <option value="requiere_correccion" ${a.estado==='requiere_correccion'?'selected':''}>Requiere corrección</option>
+              <option value="validada" ${a.estado==='validada'?'selected':''}>Validada</option>
             </select>
           </label>
           <div id="box-observaciones-correccion" style="${a.estado==='requiere_correccion'?'':'display:none'}">
@@ -1684,7 +1708,7 @@ document.addEventListener('click',async e=>{
    if(btnPedir){ btnPedir.disabled = false; btnPedir.style.display = 'inline-flex'; btnPedir.textContent = 'Enviar código a mi correo'; }
    return;
  }
- if(t.id==='btn-open-qr-scanner'){
+ if(t.id==='btn-open-qr-scanner' || t.id==='btn-dashboard-scan-qr' || t.closest('#btn-dashboard-scan-qr')){
    const modalHtml = renderQrScannerModal();
    document.body.insertAdjacentHTML('beforeend', modalHtml);
    startQrCamera();
@@ -1881,7 +1905,7 @@ document.addEventListener('submit',async e=>{
       delete S.draft.firma_usuario;
       delete S.draft.firma_enfermeria;
       S.bitacoraTab='list';
-      toast('💾 Atención guardada localmente (Modo Offline). Se sincronizará al volver la conexión.');
+      toast('Atención guardada localmente (Modo Offline). Se sincronizará al volver la conexión.');
       await view('bitacora');
       return;
     }
@@ -1891,7 +1915,7 @@ document.addEventListener('submit',async e=>{
     }catch(err){
       if(!navigator.onLine || err.message?.includes('Modo sin conexión') || err.message?.includes('conectar al servidor')){
         await OfflineDB.addQueue('/api/bitacora','POST',d,`Consulta de ${d.nombre||'paciente'}`);
-        toast('💾 Sin conexión: Atención guardada localmente. Se sincronizará automáticamente.');
+        toast('Sin conexión: Atención guardada localmente. Se sincronizará automáticamente.');
       } else throw err;
     }
     S.bitacoraDraft=null;
@@ -1911,7 +1935,7 @@ document.addEventListener('submit',async e=>{
       delete S.draft.firma_responsable;
       delete S.draft.firma_consentimiento;
       S.referralTab='list';
-      toast('💾 Canalización guardada localmente (Modo Offline). Se sincronizará al volver la conexión.');
+      toast('Canalización guardada localmente (Modo Offline). Se sincronizará al volver la conexión.');
       await view('canalizaciones');
       return;
     }
@@ -1921,7 +1945,7 @@ document.addEventListener('submit',async e=>{
     }catch(err){
       if(!navigator.onLine || err.message?.includes('Modo sin conexión') || err.message?.includes('conectar al servidor')){
         await OfflineDB.addQueue('/api/canalizaciones','POST',d,`Canalización de ${d.nombre_completo||'paciente'}`);
-        toast('💾 Sin conexión: Canalización guardada localmente.');
+        toast('Sin conexión: Canalización guardada localmente.');
       } else throw err;
     }
     S.referralDraft=null;
@@ -1941,7 +1965,7 @@ document.addEventListener('submit',async e=>{
       const m = id ? 'PUT' : 'POST';
       await OfflineDB.addQueue(ep, m, d, `Insumo ${d.medicamento_material}`);
       S.editInventory=null;
-      toast('💾 Insumo guardado localmente (Modo Offline).');
+      toast('Insumo guardado localmente (Modo Offline).');
       await view('inventario');
       return;
     }
@@ -1954,7 +1978,7 @@ document.addEventListener('submit',async e=>{
         const ep = id ? `/api/inventario/${id}` : '/api/inventario';
         const m = id ? 'PUT' : 'POST';
         await OfflineDB.addQueue(ep, m, d, `Insumo ${d.medicamento_material}`);
-        toast('💾 Insumo guardado localmente.');
+        toast('Insumo guardado localmente.');
       } else throw err;
     }
     S.editInventory=null;
@@ -1968,7 +1992,7 @@ document.addEventListener('submit',async e=>{
       const m = id ? 'PUT' : 'POST';
       await OfflineDB.addQueue(ep, m, {...d,activo:S.editContact?.activo??true}, `Contacto ${d.nombre}`);
       S.editContact=null;
-      toast('💾 Correo guardado localmente (Modo Offline).');
+      toast('Correo guardado localmente (Modo Offline).');
       await view('contactos');
       return;
     }
@@ -1980,7 +2004,7 @@ document.addEventListener('submit',async e=>{
         const ep = id ? `/api/contactos/${id}` : '/api/contactos';
         const m = id ? 'PUT' : 'POST';
         await OfflineDB.addQueue(ep, m, {...d,activo:S.editContact?.activo??true}, `Contacto ${d.nombre}`);
-        toast('💾 Correo guardado localmente.');
+        toast('Correo guardado localmente.');
       } else throw err;
     }
     S.editContact=null;
