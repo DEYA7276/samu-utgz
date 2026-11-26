@@ -49,7 +49,7 @@ async def security_headers(request:Request,call_next):
     response.headers['X-Frame-Options']='DENY'
     response.headers['Referrer-Policy']='no-referrer'
     response.headers['Permissions-Policy']='camera=(self), microphone=(), geolocation=()'
-    response.headers['Content-Security-Policy']="default-src 'self'; img-src 'self' data: blob: https://*.googleusercontent.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://openidconnect.googleapis.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+    response.headers['Content-Security-Policy']="default-src 'self'; img-src 'self' data: blob: https://*.googleusercontent.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://openidconnect.googleapis.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
     if PROD: response.headers['Strict-Transport-Security']='max-age=31536000; includeSubDomains'
     if request.url.path.startswith('/api/') or request.url.path.startswith('/descargar/'):
         response.headers['Cache-Control']='no-store, private'
@@ -688,15 +688,32 @@ def post_ficha(d:dict,request:Request,db=Depends(db_session)):
         clinical['matricula']=matricula_val
     clinical['correo']=correo
 
-    # 6. Registro del estudiante (matrícula opcional para nuevo ingreso)
-    rec=Student(folio='PENDIENTE',nombre_aspirante=clinical['nombre_aspirante'],email_verificacion=correo,matricula=matricula_val,datos=clinical,estado='pendiente')
+    # 6. Registro del estudiante con estado inicial 'pendiente_revision' y token único de QR
+    qr_token = secrets.token_urlsafe(24)
+    rec=Student(
+        folio='PENDIENTE',
+        nombre_aspirante=clinical['nombre_aspirante'],
+        email_verificacion=correo,
+        matricula=matricula_val,
+        datos=clinical,
+        estado='pendiente_revision',
+        observaciones_correccion='',
+        qr_token=qr_token,
+        status_updated=now()
+    )
     db.add(rec);db.flush();rec.folio=f'FIC-{datetime.now().year}-{rec.id:05d}'
     audit(db,None,'crear_ficha','fichas_medicas',rec.id)
     audit(db,None,'crear_ficha_publica',ident,rec.id)
     db.commit()
 
     # Confirmación sin exponer datos médicos confidenciales
-    return {'ok':True,'folio':rec.folio,'mensaje':'Ficha médica enviada a revisión de enfermería exitosamente.'}
+    return {
+        'ok':True,
+        'folio':rec.folio,
+        'qr_token':rec.qr_token,
+        'estado':'pendiente_revision',
+        'mensaje':'Ficha médica enviada a revisión de enfermería exitosamente.'
+    }
 
 def compute_medical_alerts(datos: dict) -> dict:
     if not datos:
@@ -871,14 +888,32 @@ def dashboard(current=Depends(authenticated),db=Depends(db_session)):
     }
 
 def student_summary(a):
-    return {'id':a.id,'folio':a.folio,'nombre_aspirante':a.nombre_aspirante,'email_verificacion':a.email_verificacion,'estado':a.estado,'matricula':a.matricula,'created':a.created.isoformat() if a.created else None}
+    # Compatibilidad retroactiva: si no tenía qr_token, se genera
+    qr = getattr(a, 'qr_token', None) or f'samu_{a.folio}'
+    estado_normalizado = 'pendiente_revision' if a.estado in ('pendiente', 'pendiente_revision') else a.estado
+    return {
+        'id': a.id,
+        'folio': a.folio,
+        'nombre_aspirante': a.nombre_aspirante,
+        'email_verificacion': a.email_verificacion,
+        'estado': estado_normalizado,
+        'observaciones_correccion': getattr(a, 'observaciones_correccion', '') or '',
+        'qr_token': qr,
+        'matricula': a.matricula,
+        'status_updated': a.status_updated.isoformat() if getattr(a, 'status_updated', None) else (a.created.isoformat() if a.created else None),
+        'created': a.created.isoformat() if a.created else None
+    }
 
 @app.get('/api/fichas')
 def list_fichas(estado:str='',q:str='',current=Depends(authenticated),db=Depends(db_session)):
     query=select(Student).order_by(desc(Student.id)).limit(200)
-    if estado in ('pendiente','validada'):query=query.where(Student.estado==estado)
+    if estado:
+        if estado == 'pendiente' or estado == 'pendiente_revision':
+            query=query.where(or_(Student.estado=='pendiente', Student.estado=='pendiente_revision'))
+        else:
+            query=query.where(Student.estado==estado)
     if q.strip():
-        term='%'+q.strip()[:80]+'%';query=query.where(or_(Student.nombre_aspirante.ilike(term),Student.matricula.ilike(term),Student.folio.ilike(term)))
+        term='%'+q.strip()[:80]+'%';query=query.where(or_(Student.nombre_aspirante.ilike(term),Student.matricula.ilike(term),Student.folio.ilike(term),Student.qr_token.ilike(term)))
     return [student_summary(a) for a in db.scalars(query)]
 
 @app.get('/api/fichas/{ident}')
@@ -970,6 +1005,107 @@ def student_history(ident:int,anio:str='',mes:str='',current=Depends(authenticat
         'total_canalizaciones': len(referrals),
         'total_eventos': len(items),
         'items': items
+    }
+
+@app.post('/api/fichas/{ident}/estado')
+def update_ficha_estado(ident:int,d:dict,current=Depends(authenticated),db=Depends(db_session)):
+    a=db.get(Student,ident)
+    if not a:bad('Ficha inexistente.',404)
+    nuevo_estado=clean(d,'estado',True,30)
+    estados_validos=['pendiente_revision','en_revision','requiere_correccion','validada']
+    if nuevo_estado not in estados_validos:
+        bad(f'Estado no válido. Opciones: {", ".join(estados_validos)}',422)
+    observaciones=clean(d,'observaciones_correccion',False,500) if nuevo_estado=='requiere_correccion' else ''
+    a.estado=nuevo_estado
+    a.observaciones_correccion=observaciones
+    a.status_updated=now()
+    if nuevo_estado=='validada':
+        a.validated=now()
+        a.validated_by=current[0].id
+    audit(db,current[0].id,f'cambio_estado_{nuevo_estado}','fichas_medicas',a.id)
+    db.commit()
+    return {'ok':True,'estado':a.estado,'observaciones':a.observaciones_correccion,'status_updated':a.status_updated.isoformat()}
+
+@app.post('/api/fichas/{ident}/regenerar-qr')
+def regenerate_student_qr(ident:int,current=Depends(authenticated),db=Depends(db_session)):
+    a=db.get(Student,ident)
+    if not a:bad('Ficha inexistente.',404)
+    a.qr_token=secrets.token_urlsafe(24)
+    audit(db,current[0].id,'regenerar_qr_ficha','fichas_medicas',a.id)
+    db.commit()
+    return {'ok':True,'qr_token':a.qr_token}
+
+@app.get('/api/qr/scan/{token}')
+def scan_qr_token(token:str,current=Depends(authenticated),db=Depends(db_session)):
+    clean_token = token.strip()
+    if not clean_token: bad('Código QR vacío o inválido.',400)
+    # Buscar por token de QR exacto o por folio directo
+    a = db.scalar(select(Student).where(or_(Student.qr_token == clean_token, Student.folio == clean_token)))
+    if not a:
+        bad('Código QR no registrado, revocado o inválido en SAMU.',404)
+    audit(db,current[0].id,'escanear_qr_exitoso','fichas_medicas',a.id)
+    db.commit()
+    datos=a.datos or {}
+    edad=edad_a_partir_de_fecha(datos['fecha_nacimiento']) if datos.get('fecha_nacimiento') else None
+    alerts=compute_medical_alerts(datos)
+    return {
+        'ok': True,
+        'student': {
+            **student_summary(a),
+            'edad_actual': edad,
+            'datos': datos,
+            'foto': (a.foto or {}).get('data',''),
+            'alertas_medicas': alerts
+        }
+    }
+
+@app.post('/api/alumnos/consultar-estado')
+def consultar_estado_alumno(d:dict,db=Depends(db_session)):
+    correo = valid_email(clean(d, 'correo', True, 254))
+    codigo_verif = clean(d, 'codigo_verificacion', True, 10).strip()
+    
+    otp = db.scalar(select(EmailOTP).where(
+        EmailOTP.email == correo,
+        EmailOTP.consumed == False
+    ).order_by(desc(EmailOTP.created)))
+    
+    if not otp or naive_utc(otp.expires) < now():
+        bad('El código de verificación ha expirado o no es válido.', 400)
+    if otp.attempts >= 5:
+        bad('Demasiados intentos fallidos. Solicita un código nuevo.', 429)
+        
+    expected_hash = hashlib.sha256(codigo_verif.encode()).hexdigest()
+    if not secrets.compare_digest(otp.code_hash, expected_hash):
+        otp.attempts += 1
+        db.commit()
+        bad('Código de verificación incorrecto.', 400)
+        
+    otp.consumed = True
+    db.commit()
+    
+    student = db.scalar(select(Student).where(Student.email_verificacion == correo).order_by(desc(Student.id)))
+    if not student:
+        bad('No se encontró ninguna ficha médica registrada con este correo electrónico.', 404)
+        
+    # Asegurar que tenga token de QR único
+    if not getattr(student, 'qr_token', None):
+        student.qr_token = secrets.token_urlsafe(24)
+        db.commit()
+        
+    estado_normalizado = 'pendiente_revision' if student.estado in ('pendiente', 'pendiente_revision') else student.estado
+    
+    # IMPORTANTE POR SEGURIDAD: La credencial/estado NO devuelve datos médicos sensibles (NSS, alergias, tipo de sangre, padecimientos)
+    return {
+        'ok': True,
+        'folio': student.folio,
+        'nombre_estudiante': student.nombre_aspirante,
+        'matricula': student.matricula or 'Pendiente de asignación',
+        'programa_educativo': (student.datos or {}).get('programa_educativo', 'UTGZ'),
+        'estado': estado_normalizado,
+        'observaciones_correccion': getattr(student, 'observaciones_correccion', '') or '',
+        'status_updated': student.status_updated.isoformat() if getattr(student, 'status_updated', None) else (student.created.isoformat() if student.created else None),
+        'qr_token': student.qr_token,
+        'created': student.created.isoformat() if student.created else None
     }
 
 @app.post('/api/fichas/{ident}/validar')

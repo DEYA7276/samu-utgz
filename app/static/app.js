@@ -287,7 +287,233 @@ function checksWithSelected(name,options,selected=[]){return `<div class="checks
 function sig(name,label){return `<label class="field full">${escapeHtml(label)}</label><div class="sig-box full" data-signature="${name}"><canvas width="900" height="200" role="img" aria-label="Área para firmar con dedo o mouse"></canvas><div class="sig-actions"><small>Firma aquí con el dedo, lápiz o mouse</small><button class="link-button" type="button" data-clear="${name}">Borrar firma</button></div></div>`}
 function obj(form){const data={};for(const [k,v] of new FormData(form)){if(data[k]!==undefined){if(!Array.isArray(data[k]))data[k]=[data[k]];data[k].push(v)}else data[k]=v}return data}
 function parseErr(e){toast(e.message||'Error inesperado',true)}
-function frame(content,inner=false){if(inner)return `<header class="hero-header"><a href="/" class="brand" data-view="${S.user?'dashboard':'inicio'}"><img src="${logo}" alt="Samu"><span><strong>SAMU</strong><small>Atención Médica Universitaria</small></span></a><div class="header-actions">${themeToggle()}<button class="btn secondary sm" data-view="alumno">Ficha médica</button>${S.user?`<button class="btn primary sm" data-view="dashboard">Panel Enfermería</button>`:`<button class="btn primary sm" data-view="login">Enfermería</button>`}</div></header>${content}`;return content}
+function frame(content,inner=false){if(inner)return `<header class="hero-header"><a href="/" class="brand" data-view="${S.user?'dashboard':'inicio'}"><img src="${logo}" alt="Samu"><span><strong>SAMU</strong><small>Atención Médica Universitaria</small></span></a><div class="header-actions">${themeToggle()}<button class="btn secondary sm" data-view="consultar_estado">Estado / Credencial QR</button><button class="btn secondary sm" data-view="alumno">Ficha médica</button>${S.user?`<button class="btn primary sm" data-view="dashboard">Panel Enfermería</button>`:`<button class="btn primary sm" data-view="login">Enfermería</button>`}</div></header>${content}`;return content}
+
+/* === VISTAS DE ESTADO, CREDENCIAL DIGITAL Y ESCÁNER QR === */
+function badgeEstadoFicha(estado){
+  switch(estado){
+    case 'pendiente_revision':
+    case 'pendiente':
+      return '<span class="pill pending">⏳ Pendiente de revisión</span>';
+    case 'en_revision':
+      return '<span class="pill" style="background:#e0f2fe;color:#0369a1">🔍 En revisión médica</span>';
+    case 'requiere_correccion':
+      return '<span class="pill warn">⚠️ Requiere corrección</span>';
+    case 'validada':
+      return '<span class="pill" style="background:#dcfce7;color:#15803d">✅ Validada</span>';
+    default:
+      return `<span class="pill">${escapeHtml(estado)}</span>`;
+  }
+}
+
+function consultarEstadoView(){
+  return frame(`
+    <main class="student-container" style="max-width:700px;margin:30px auto;padding:0 15px">
+      <div class="student-lead">
+        <div>
+          <span class="eyebrow">Portal Estudiantil · UTGZ</span>
+          <h1>Estado de mi Ficha Médica</h1>
+          <p class="muted">Consulta el avance de revisión de tu expediente clínico y obtén tu Credencial Digital SAMU.</p>
+        </div>
+        <img src="${logo}" alt="Samu">
+      </div>
+
+      <section class="paper" id="estado-check-card">
+        <h2>Verificar identidad</h2>
+        <p class="hint">Por privacidad médica (NOM-004-SSA3), ingresa el correo que registraste en tu ficha para recibir un código OTP de acceso seguro.</p>
+        
+        <form id="form-consulta-otp">
+          <div class="form-grid" style="grid-template-columns:1fr">
+            ${bare('correo_consulta','Correo electrónico institucional o de contacto','email',{placeholder:'tu_correo@utgz.edu.mx'})}
+          </div>
+          <div class="actions" style="margin-top:15px">
+            <button type="button" class="btn primary" id="btn-pedir-otp-consulta">Enviar código a mi correo</button>
+          </div>
+        </form>
+
+        <form id="form-verificar-consulta" style="display:none;margin-top:24px;border-top:1px solid var(--line);padding-top:20px">
+          <div class="form-grid" style="grid-template-columns:1fr">
+            <label class="field">Código de 6 dígitos recibido
+              <input type="text" id="input-codigo-consulta" maxlength="6" pattern="[0-9]{6}" placeholder="Ej. 123456" required>
+            </label>
+          </div>
+          <div class="actions" style="margin-top:15px">
+            <button type="submit" class="btn green" id="btn-validar-consulta">Consultar mi estado y Credencial</button>
+            <button type="button" class="btn secondary" id="btn-cambiar-correo-consulta">Cambiar correo</button>
+          </div>
+        </form>
+      </section>
+
+      <div id="resultado-credencial-card" style="display:none"></div>
+    </main>
+  `, true);
+}
+
+function renderCredencialCard(data){
+  const fechaActualizacion = data.status_updated ? new Date(data.status_updated).toLocaleString('es-MX', {dateStyle:'medium', timeStyle:'short'}) : 'Reciente';
+  const obsHtml = (data.estado === 'requiere_correccion' && data.observaciones_correccion) ? `
+    <div class="warning-banner" style="margin:16px 0;text-align:left">
+      <strong>⚠️ Observación de Enfermería:</strong><br>
+      ${escapeHtml(data.observaciones_correccion)}
+      <p class="hint" style="margin-top:6px">Por favor acude al consultorio de Enfermería o comunícate con el área médica para actualizar este campo.</p>
+    </div>
+  ` : '';
+
+  return `
+    <section class="paper" style="border:2px solid #28684f;border-radius:24px;overflow:hidden;box-shadow:0 12px 36px rgba(40,104,79,0.12);background:linear-gradient(180deg,#ffffff 0%,#f7faf8 100%)">
+      <div style="background:var(--navy);color:#fff;padding:20px;display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:12px">
+          <img src="${logo}" style="width:48px;height:48px;background:#fff;border-radius:50%;padding:4px" alt="SAMU">
+          <div>
+            <h3 style="color:#fff;margin:0;font-size:1.15rem;letter-spacing:0.5px">CREDENCIAL DIGITAL SAMU</h3>
+            <span style="font-size:0.75rem;color:#b4d2bf;text-transform:uppercase">Universidad Tecnológica de Gutiérrez Zamora</span>
+          </div>
+        </div>
+        <div>
+          ${badgeEstadoFicha(data.estado)}
+        </div>
+      </div>
+
+      <div style="padding:28px 24px;text-align:center">
+        <h2 style="font-size:1.45rem;color:var(--navy2);margin:0 0 6px">${escapeHtml(data.nombre_estudiante)}</h2>
+        <p class="muted" style="margin:0 0 16px;font-size:0.92rem">
+          Matrícula: <b>${escapeHtml(data.matricula)}</b> · Folio: <span style="font-family:monospace">${escapeHtml(data.folio)}</span>
+        </p>
+        <span class="chip" style="display:inline-block;margin-bottom:20px">${escapeHtml(data.programa_educativo)}</span>
+
+        ${obsHtml}
+
+        <div style="background:#fff;border:1.5px dashed var(--line);border-radius:18px;padding:20px;display:inline-block;margin:10px auto;box-shadow:0 4px 15px rgba(0,0,0,0.04)">
+          <div id="qrcode-container" style="display:flex;justify-content:center;margin:0 auto"></div>
+          <small style="display:block;margin-top:10px;color:var(--muted);font-size:0.75rem">Identificador seguro: ${escapeHtml(data.qr_token)}</small>
+        </div>
+
+        <p class="hint" style="max-width:440px;margin:18px auto 0;line-height:1.5">
+          🔒 <b>Seguridad médica:</b> Este código QR NO contiene diagnósticos, alergias ni datos clínicos. Presenta esta credencial en la pantalla de tu celular al acudir al consultorio para que Enfermería escanee y abra tu expediente al instante.
+        </p>
+
+        <div class="actions" style="margin-top:22px;justify-content:center">
+          <button type="button" class="btn primary sm" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+          <button type="button" class="btn secondary sm" data-view="inicio">Volver al inicio</button>
+        </div>
+
+        <small style="display:block;margin-top:14px;color:var(--muted);font-size:0.72rem">Última actualización de estado: ${fechaActualizacion}</small>
+      </div>
+    </section>
+  `;
+}
+
+/* Modal Escáner QR de Enfermería con Cámara */
+let html5QrScannerStream = null;
+let qrScanAnimFrame = null;
+
+function renderQrScannerModal(){
+  return `
+    <div id="qr-scanner-modal" style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(16,24,32,0.85);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px">
+      <div style="background:#fff;border-radius:24px;max-width:520px;width:100%;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.3)">
+        <div style="background:var(--navy);color:#fff;padding:18px 22px;display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:1.3rem">📷</span>
+            <strong style="font-size:1.05rem">Escanear Credencial QR de Alumno</strong>
+          </div>
+          <button type="button" id="btn-close-scanner" style="background:transparent;border:0;color:#fff;font-size:1.5rem;cursor:pointer;line-height:1">&times;</button>
+        </div>
+
+        <div style="padding:22px">
+          <div style="position:relative;background:#000;border-radius:16px;overflow:hidden;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center">
+            <video id="qr-video" playsinline style="width:100%;height:100%;object-fit:cover"></video>
+            <canvas id="qr-canvas" style="display:none"></canvas>
+            
+            <div style="position:absolute;width:60%;height:60%;border:2px solid #56b280;border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,0.45);pointer-events:none">
+              <div style="width:100%;height:2px;background:#56b280;animation:scanBeam 2s infinite ease-in-out"></div>
+            </div>
+            <div id="qr-scan-loading" style="position:absolute;color:#fff;font-size:0.85rem;background:rgba(0,0,0,0.6);padding:6px 14px;border-radius:20px">
+              Iniciando cámara…
+            </div>
+          </div>
+
+          <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
+            <label class="field" style="font-size:0.82rem">O buscar manualmente por código / folio / token:
+              <div style="display:flex;gap:8px;margin-top:6px">
+                <input type="text" id="manual-qr-token" placeholder="Ingresa folio o token del QR">
+                <button type="button" class="btn primary sm" id="btn-manual-qr-search">Buscar</button>
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function startQrCamera(){
+  const video = $('#qr-video');
+  const canvas = $('#qr-canvas');
+  const loading = $('#qr-scan-loading');
+  if(!video || !canvas) return;
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' }
+    });
+    html5QrScannerStream = stream;
+    video.srcObject = stream;
+    await video.play();
+    if(loading) loading.style.display = 'none';
+
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    function tick(){
+      if(video.readyState === video.HAVE_ENOUGH_DATA){
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        if(window.jsQR){
+          const code = window.jsQR(imgData.data, imgData.width, imgData.height, {
+            inversionAttempts: 'dontInvert'
+          });
+          if(code && code.data){
+            stopQrCamera();
+            $('#qr-scanner-modal')?.remove();
+            processScannedToken(code.data);
+            return;
+          }
+        }
+      }
+      qrScanAnimFrame = requestAnimationFrame(tick);
+    }
+    qrScanAnimFrame = requestAnimationFrame(tick);
+  } catch (err) {
+    if(loading) loading.textContent = 'No se pudo acceder a la cámara. Usa la búsqueda manual.';
+    toast('No se pudo iniciar la cámara: ' + (err.message || 'Permiso denegado'), true);
+  }
+}
+
+function stopQrCamera(){
+  if(qrScanAnimFrame) cancelAnimationFrame(qrScanAnimFrame);
+  if(html5QrScannerStream){
+    html5QrScannerStream.getTracks().forEach(t => t.stop());
+    html5QrScannerStream = null;
+  }
+}
+
+async function processScannedToken(rawToken){
+  const token = rawToken.trim();
+  toast('Procesando código QR…');
+  try {
+    const res = await api(`/api/qr/scan/${encodeURIComponent(token)}`);
+    if(res.ok && res.student){
+      toast(`¡Estudiante localizado! ${res.student.nombre_aspirante}`);
+      S.selectedId = res.student.id;
+      $('#app').innerHTML = ficheDetail(res.student);
+      window.scrollTo({top:0, behavior:'smooth'});
+    }
+  } catch (err) {
+    toast(err.message || 'Código QR no reconocido o inexistente en SAMU.', true);
+  }
+}
 
 // Portada sin chips innecesarios
 function welcome(){
@@ -300,6 +526,7 @@ function welcome(){
   ` : `
     <div class="actions">
       <button class="btn primary" data-view="alumno">Llenar mi ficha médica</button>
+      <button class="btn green" data-view="consultar_estado">${icon('fichas',16)} Consultar mi Ficha / Credencial QR</button>
       <button class="btn outline" data-view="login">Acceso a enfermería</button>
     </div>
   `;
@@ -596,19 +823,22 @@ function fichas(rows){
           <p class="hint">Formularios clínicos y expedientes validados</p>
         </div>
         <div class="actions">
+          <button type="button" id="btn-open-qr-scanner" class="btn primary sm">📷 Escanear QR</button>
           <button data-view="importar" class="btn green sm">${icon('importar',16)} Importar alumnos (Excel/CSV)</button>
         </div>
       </div>
       <div class="searchline">
-        <input id="fichas-q" placeholder="Buscar por nombre, folio o matrícula">
+        <input id="fichas-q" placeholder="Buscar por nombre, folio, matrícula o QR">
         <select id="fichas-estado">
-          <option value="">Todas las fichas</option>
-          <option value="pendiente">Pendientes</option>
+          <option value="">Todos los estados</option>
+          <option value="pendiente_revision">Pendiente de revisión</option>
+          <option value="en_revision">En revisión</option>
+          <option value="requiere_correccion">Requiere corrección</option>
           <option value="validada">Validadas</option>
         </select>
         <button id="fichas-search" class="btn secondary">Buscar</button>
       </div>
-      ${table(['Folio','Aspirante / Estudiante','Matrícula','Estado','Registro','Acciones'],rows.map(r=>`<tr><td>${escapeHtml(r.folio)}</td><td>${escapeHtml(r.nombre_aspirante)}</td><td>${escapeHtml(r.matricula||'—')}</td><td><span class="pill ${r.estado==='pendiente'?'pending':''}">${escapeHtml(r.estado)}</span></td><td>${escapeHtml((r.created||'').slice(0,10))}</td><td><div class="actions"><button class="btn sm secondary" data-ficha="${r.id}">Revisar</button><button class="btn sm green" data-editfiche="${r.id}">Editar</button></div></td></tr>`))}
+      ${table(['Folio','Aspirante / Estudiante','Matrícula','Estado','Registro','Acciones'],rows.map(r=>`<tr><td>${escapeHtml(r.folio)}</td><td>${escapeHtml(r.nombre_aspirante)}</td><td>${escapeHtml(r.matricula||'—')}</td><td>${badgeEstadoFicha(r.estado)}</td><td>${escapeHtml((r.created||'').slice(0,10))}</td><td><div class="actions"><button class="btn sm secondary" data-ficha="${r.id}">Revisar</button><button class="btn sm green" data-editfiche="${r.id}">Editar</button></div></td></tr>`))}
     </section>
   `,'Fichas médicas','Expedientes clínicos y registro de alumnos');
 }
@@ -681,13 +911,47 @@ function ficheDetail(a){
       </div>
     </section>
 
-    ${a.estado==='pendiente'?`
+    <!-- GESTIÓN DE ESTADO DE LA FICHA POR ENFERMERÍA -->
+    <section class="paper" style="border-left:5px solid #28684f">
+      <div class="section-title">
+        <div>
+          <h2>Control de Revisión y Estado de la Ficha</h2>
+          <p class="hint">Estado actual: ${badgeEstadoFicha(a.estado)} · Token QR: <code style="background:#eaf2ee;padding:3px 8px;border-radius:6px">${escapeHtml(a.qr_token||'—')}</code></p>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn secondary sm" id="btn-regenerar-qr" data-id="${a.id}">🔄 Regenerar Código QR</button>
+        </div>
+      </div>
+
+      <form id="form-cambiar-estado" data-id="${a.id}">
+        <div class="form-grid">
+          <label class="field">Asignar nuevo estado
+            <select name="estado" id="select-estado-ficha">
+              <option value="pendiente_revision" ${['pendiente','pendiente_revision'].includes(a.estado)?'selected':''}>⏳ Pendiente de revisión</option>
+              <option value="en_revision" ${a.estado==='en_revision'?'selected':''}>🔍 En revisión médica</option>
+              <option value="requiere_correccion" ${a.estado==='requiere_correccion'?'selected':''}>⚠️ Requiere corrección</option>
+              <option value="validada" ${a.estado==='validada'?'selected':''}>✅ Validada</option>
+            </select>
+          </label>
+          <div id="box-observaciones-correccion" style="${a.estado==='requiere_correccion'?'':'display:none'}">
+            <label class="field">Indicaciones para el estudiante (sin datos clínicos sensibles)
+              <textarea name="observaciones_correccion" rows="2" placeholder="Ej. Favor de acudir al consultorio para actualizar contacto de emergencia">${escapeHtml(a.observaciones_correccion||'')}</textarea>
+            </label>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:16px">
+          <button type="submit" class="btn primary sm">Actualizar Estado</button>
+        </div>
+      </form>
+    </section>
+
+    ${a.estado!=='validada'?`
       <section class="paper">
-        <h2>Validar ficha · Solo enfermería</h2>
+        <h2>Validar matrícula y fotografía del alumno</h2>
         <form id="validate-form" data-id="${a.id}">
           <div class="form-grid">
-            ${bare('matricula','Matrícula del alumno')}
-            ${bare('correo','Correo electrónico institucional','email')}
+            ${bare('matricula','Matrícula asignada al alumno','text',{value:a.matricula||''})}
+            ${bare('correo','Correo electrónico institucional','email',{value:a.email_verificacion||''})}
             <label class="field">Fotografía del alumno
               <input type="file" id="foto-alumno" accept="image/jpeg,image/png" capture="environment" style="display:block;margin-top:10px">
             </label>
@@ -1089,6 +1353,7 @@ async function view(v){S.view=v;S.selectedId=null;const root=$('#app');if(!root)
     html=inventario(S.rows);
   }
   if(v==='contactos'){S.contacts=await api('/api/contactos');html=contactos(S.contacts)}
+  if(v==='consultar_estado'){html=consultarEstadoView()}
   if(html){root.innerHTML=html;setupSignatures()}
  }catch(e){root.innerHTML=adminLayout(`<section class="paper"><div class="warning-banner">${escapeHtml(e.message)}</div><button class="btn secondary" data-view="dashboard">Volver al inicio</button></section>`,'Error','No se pudo cargar el módulo')}
 }
@@ -1388,15 +1653,130 @@ document.addEventListener('click',async e=>{
  if(t.id==='export-inv'){download('inventario',null,$('#inventory-quarter').value);return}
  if(t.id==='filter-bitacora'){try{S.month=$('#bitacora-mes').value;if(!S.month)throw Error('Selecciona el mes que quieres consultar.');S.rows=await api(`/api/bitacora?mes=${encodeURIComponent(S.month)}`);const section=t.closest('.paper'),tableWrap=section?.querySelector('.table-wrap');if(tableWrap)tableWrap.outerHTML=attentionTable(S.rows)}catch(err){parseErr(err)}return}
  if(t.dataset.contactEdit){S.editContact=S.contacts.find(r=>String(r.id)===t.dataset.contactEdit);$('#app').innerHTML=contactos(S.contacts);scrollTo({top:0,behavior:'smooth'});return}
- if(t.id==='clear-contact'){S.editContact=null;$('#app').innerHTML=contactos(S.contacts);return}
+ if(t.id==='btn-pedir-otp-consulta'){
+   const correo = ($('#correo_consulta')?.value||'').trim();
+   if(!correo || !correo.includes('@')){toast('Ingresa un correo electrónico válido.', true); return}
+   t.disabled = true;
+   t.textContent = 'Enviando código…';
+   try {
+     let csrfToken = S.csrf;
+     if(!csrfToken){ try{ const c=await api('/api/csrf-public'); csrfToken=c.csrf; S.csrf=csrfToken }catch{} }
+     await api('/api/alumnos/verificar-correo', {
+       method: 'POST',
+       data: { correo },
+       headers: csrfToken ? {'X-CSRF-Token': csrfToken} : {}
+     });
+     toast('Código de verificación enviado a tu correo.');
+     $('#form-verificar-consulta').style.display = 'block';
+     $('#correo_consulta').readOnly = true;
+     t.style.display = 'none';
+   } catch(err){
+     toast(err.message || 'Error al enviar código', true);
+     t.disabled = false;
+     t.textContent = 'Enviar código a mi correo';
+   }
+   return;
+ }
+ if(t.id==='btn-cambiar-correo-consulta'){
+   $('#form-verificar-consulta').style.display = 'none';
+   $('#correo_consulta').readOnly = false;
+   const btnPedir = $('#btn-pedir-otp-consulta');
+   if(btnPedir){ btnPedir.disabled = false; btnPedir.style.display = 'inline-flex'; btnPedir.textContent = 'Enviar código a mi correo'; }
+   return;
+ }
+ if(t.id==='btn-open-qr-scanner'){
+   const modalHtml = renderQrScannerModal();
+   document.body.insertAdjacentHTML('beforeend', modalHtml);
+   startQrCamera();
+   return;
+ }
+ if(t.id==='btn-close-scanner'){
+   stopQrCamera();
+   $('#qr-scanner-modal')?.remove();
+   return;
+ }
+ if(t.id==='btn-manual-qr-search'){
+   const token = ($('#manual-qr-token')?.value || '').trim();
+   if(!token){ toast('Ingresa el folio o código del QR', true); return; }
+   stopQrCamera();
+   $('#qr-scanner-modal')?.remove();
+   processScannedToken(token);
+   return;
+ }
+ if(t.id==='btn-regenerar-qr'){
+   const id = t.dataset.id;
+   if(!id || !confirm('¿Deseas revocar el QR actual y generar un nuevo identificador para este alumno?')) return;
+   try {
+     const res = await api(`/api/fichas/${id}/regenerar-qr`, { method: 'POST' });
+     toast('Nuevo código QR generado con éxito');
+     const f = await api(`/api/fichas/${id}`);
+     $('#app').innerHTML = ficheDetail(f);
+   } catch(err){ parseErr(err); }
+   return;
+ }
+ if(t.id==='fichas-search'){
+   const q = ($('#fichas-q')?.value||'').trim();
+   const est = ($('#fichas-estado')?.value||'').trim();
+   try {
+     const p = new URLSearchParams();
+     if(q) p.set('q', q);
+     if(est) p.set('estado', est);
+     S.rows = await api(`/api/fichas?${p.toString()}`);
+     const sec = t.closest('.paper');
+     const tw = sec?.querySelector('.table-wrap');
+     if(tw) tw.outerHTML = table(['Folio','Aspirante / Estudiante','Matrícula','Estado','Registro','Acciones'],S.rows.map(r=>`<tr><td>${escapeHtml(r.folio)}</td><td>${escapeHtml(r.nombre_aspirante)}</td><td>${escapeHtml(r.matricula||'—')}</td><td>${badgeEstadoFicha(r.estado)}</td><td>${escapeHtml((r.created||'').slice(0,10))}</td><td><div class="actions"><button class="btn sm secondary" data-ficha="${r.id}">Revisar</button><button class="btn sm green" data-editfiche="${r.id}">Editar</button></div></td></tr>`));
+   } catch(err){ parseErr(err); }
+   return;
+ }
  if(t.id==='btn-sync-now'){syncPendingQueue();return}
  if(t.dataset.contactToggle){const a=S.contacts.find(r=>String(r.id)===t.dataset.contactToggle);if(!a)return;try{await api(`/api/contactos/${a.id}`,{method:'PUT',data:{...a,activo:!a.activo}});toast('Destinatario actualizado.');view('contactos')}catch(err){parseErr(err)}return}
  if(t.dataset.contactDelete){const a=S.contacts.find(r=>String(r.id)===t.dataset.contactDelete);if(!a)return;if(!confirm(`¿Deseas eliminar a "${a.nombre}" (${a.correo}) de la lista de destinatarios?`))return;try{const res=await api(`/api/contactos/${a.id}`,{method:'DELETE'});toast(res?.message||'Correo eliminado de la base de datos.');view('contactos')}catch(err){parseErr(err)}return}
 });
 
 document.addEventListener('submit',async e=>{
- const form=e.target;if(!['login-form','student-form','validate-form','student-email-form','bitacora-form','referral-form','inventory-form','contact-form','send-referral-form','edit-fiche-form'].includes(form.id))return;e.preventDefault();const btn=form.querySelector('button[type=submit],button:not([type])');if(btn)btn.disabled=true;
+ const form=e.target;if(!['login-form','student-form','validate-form','student-email-form','bitacora-form','referral-form','inventory-form','contact-form','send-referral-form','edit-fiche-form','form-verificar-consulta','form-cambiar-estado'].includes(form.id))return;e.preventDefault();const btn=form.querySelector('button[type=submit],button:not([type])');if(btn)btn.disabled=true;
  try{
+  if(form.id==='form-verificar-consulta'){
+    const correo = ($('#correo_consulta')?.value||'').trim();
+    const codigo = ($('#input-codigo-consulta')?.value||'').trim();
+    if(!codigo || codigo.length < 6) throw Error('Ingresa el código de 6 dígitos enviado a tu correo.');
+    const res = await api('/api/alumnos/consultar-estado', {
+      method: 'POST',
+      data: { correo, codigo_verificacion: codigo }
+    });
+    if(!res.ok) throw Error('No se pudo consultar el estado.');
+    $('#estado-check-card').style.display = 'none';
+    const resCard = $('#resultado-credencial-card');
+    resCard.style.display = 'block';
+    resCard.innerHTML = renderCredencialCard(res);
+    // Generar código QR con la librería cliente QRCode
+    if(window.QRCode){
+      new QRCode($('#qrcode-container'), {
+        text: res.qr_token,
+        width: 170,
+        height: 170,
+        colorDark: '#123424',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    } else {
+      $('#qrcode-container').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=${encodeURIComponent(res.qr_token)}" alt="Código QR">`;
+    }
+    toast('¡Identidad verificada! Credencial Digital generada.');
+    return;
+  }
+  if(form.id==='form-cambiar-estado'){
+    const estado = form.elements.estado.value;
+    const obs = form.elements.observaciones_correccion ? form.elements.observaciones_correccion.value : '';
+    await api(`/api/fichas/${form.dataset.id}/estado`, {
+      method: 'POST',
+      data: { estado, observaciones_correccion: obs }
+    });
+    toast('Estado de la ficha médica actualizado correctamente.');
+    const a = await api(`/api/fichas/${form.dataset.id}`);
+    $('#app').innerHTML = ficheDetail(a);
+    return;
+  }
   if(form.id==='login-form'){const d=obj(form);const r=await api('/api/session/login',{method:'POST',data:d});S.user=r.user;S.csrf=r.csrf;toast('Bienvenido al panel de enfermería');await view('dashboard')}
   if(form.id==='student-form'){
     if(S.step<7){
@@ -1608,6 +1988,13 @@ document.addEventListener('submit',async e=>{
   }
   if(form.id==='send-referral-form'){const ids=[...form.querySelectorAll('[name=contact_ids]:checked')].map(x=>Number(x.value));if(!ids.length)throw Error('Selecciona al menos un correo guardado.');if(!confirm(`¿Enviar documento médico a ${ids.length} destinatario(s) autorizado(s)?`))return;const r=await api(`/api/canalizaciones/${form.dataset.id}/enviar`,{method:'POST',data:{contact_ids:ids}});toast(r.ok?'Servidor de correo aceptó el mensaje.':'Algunos correos no pudieron enviarse',!r.ok);await view('canalizaciones')}
  }catch(err){parseErr(err)}finally{if(btn&&btn.isConnected)btn.disabled=false}
+});
+
+document.addEventListener('change', e => {
+  if(e.target.id === 'select-estado-ficha'){
+    const box = $('#box-observaciones-correccion');
+    if(box) box.style.display = e.target.value === 'requiere_correccion' ? 'block' : 'none';
+  }
 });
 
 // Dropzone drag & drop support
