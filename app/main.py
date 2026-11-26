@@ -11,6 +11,10 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, func, or_, desc
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from . import pdf_templates as pdf, mailer, importer
 from .auth import authenticated, requires_admin, hash_password, check_password, new_login, hash_token, now, naive_utc, COOKIE, COOKIE_SECURE
 from .db import SessionLocal, init_db, Nurse, LoginSession, Student, Attention, Referral, Inventory, Contact, MailLog, Audit, DownloadToken, audit, EmailOTP
