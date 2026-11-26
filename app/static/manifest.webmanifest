@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "SAMU · Enfermería UTGZ",
+  "name": "SAMU - Enfermeria UTGZ",
   "short_name": "SAMU",
-  "description": "Sistema de Atención Médica Universitaria",
+  "description": "Sistema de Atencion Medica Universitaria",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

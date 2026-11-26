@@ -1,5 +1,5 @@
 // Service Worker PWA para SAMU UTGZ - Soporte Offline y Cache Resiliente
-const CACHE = 'samu-pwa-v2.9.1';
+const CACHE = 'samu-pwa-v2.9.2';
 const ASSETS = [
   '/',
   '/index.html',

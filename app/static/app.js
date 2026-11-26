@@ -821,7 +821,7 @@ function medicalAlertsHtml(alerts){
 function alertasView(d){
   const inv = d.inventario_alertas || {agotados:0,stock_bajo:0,por_caducar:0,caducados:0,total_alertas:0};
   const fichasAlerta = d.fichas_recientes_revision || [];
-  const pendientes = d.pendientes_revision || 0;
+  const pendientes = d.pendientes || 0;
   const enRevision = d.en_revision || 0;
   const requiere = d.requiere_correccion || 0;
 
@@ -1632,6 +1632,7 @@ async function view(v){S.view=v;S.selectedId=null;const root=$('#app');if(!root)
     html=inventario(S.rows);
   }
   if(v==='contactos'){S.contacts=await api('/api/contactos');html=contactos(S.contacts)}
+  if(v==='alertas'){const data=await api('/api/resumen');html=alertasView(data)}
   if(html){root.innerHTML=html;setupSignatures()}
  }catch(e){root.innerHTML=adminLayout(`<section class="paper"><div class="warning-banner">${escapeHtml(e.message)}</div><button class="btn secondary" data-view="dashboard">Volver al inicio</button></section>`,'Error','No se pudo cargar el módulo')}
 }
