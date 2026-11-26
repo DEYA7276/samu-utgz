@@ -584,22 +584,64 @@ async function processScannedToken(rawToken){
   }
 }
 
-// Portada sin chips innecesarios
+// Portada con dos inicios claros: Estudiantes y Enfermeria
 function welcome(){
-  const actionsHtml = S.user ? `
-    <div class="actions">
-      <button class="btn primary" data-view="dashboard">Ir al Dashboard de Enfermería</button>
-      <button class="btn green" data-view="importar">${icon('importar',16)} Importar alumnos (Excel/CSV)</button>
-      <button class="btn outline" data-view="fichas">Ver Fichas médicas</button>
+  const nurseCard = S.user ? `
+    <div style="background:#fff;border:1px solid var(--line);border-radius:20px;padding:26px;box-shadow:0 8px 24px rgba(0,0,0,0.04);display:flex;flex-direction:column;justify-content:space-between">
+      <div>
+        <span class="eyebrow">Personal de Salud</span>
+        <h2 style="margin:6px 0 10px;color:var(--navy)">Panel de Enfermeria</h2>
+        <p class="muted" style="margin:0 0 18px;font-size:0.92rem">Sesion activa como <b>${escapeHtml(S.user.name||'Enfermeria')}</b>. Accede al dashboard, revision de fichas, bitacora e inventario.</p>
+      </div>
+      <div class="actions" style="flex-direction:column;align-items:stretch;gap:10px">
+        <button class="btn primary" data-view="dashboard">Ir al Panel de Enfermeria</button>
+        <button class="btn outline" data-view="alertas">Centro de Alertas</button>
+      </div>
     </div>
   ` : `
-    <div class="actions">
-      <button class="btn primary" data-view="alumno">Llenar mi ficha médica</button>
-      <button class="btn green" data-view="consultar_estado">${icon('fichas',16)} Consultar mi Ficha / Credencial QR</button>
-      <button class="btn outline" data-view="login">Acceso a enfermería</button>
+    <div style="background:#fff;border:1px solid var(--line);border-radius:20px;padding:26px;box-shadow:0 8px 24px rgba(0,0,0,0.04);display:flex;flex-direction:column;justify-content:space-between">
+      <div>
+        <span class="eyebrow">Personal de Salud</span>
+        <h2 style="margin:6px 0 10px;color:var(--navy)">Inicio Enfermeria</h2>
+        <p class="muted" style="margin:0 0 18px;font-size:0.92rem">Acceso exclusivo para personal de enfermeria. Inicia sesion con tu cuenta institucional de Google o con correo y contrasena.</p>
+      </div>
+      <div class="actions" style="flex-direction:column;align-items:stretch;gap:10px">
+        <button class="btn primary" data-view="login">Iniciar sesion (Google o Correo)</button>
+      </div>
     </div>
   `;
-  return frame(`<main class="hero"><div class="hero-grid"><div class="hero-left"><span class="eyebrow">Universidad Tecnológica de Gutiérrez Zamora</span><h1>Tu salud,<br><em>nuestro compromiso.</em></h1><p class="hero-desc">SAMU facilita el registro de fichas médicas y el trabajo diario del servicio de Enfermería de la universidad, de forma segura y organizada.</p>${actionsHtml}</div><img class="hero-art" src="${logo}" alt="Samu, cocodrilo médico con estetoscopio"></div></main>`,true);
+
+  const studentCard = `
+    <div style="background:linear-gradient(180deg,#ffffff 0%,#f5faf7 100%);border:2px solid var(--sea);border-radius:20px;padding:26px;box-shadow:0 8px 24px rgba(40,104,79,0.08);display:flex;flex-direction:column;justify-content:space-between">
+      <div>
+        <span class="eyebrow">Estudiantes y Aspirantes</span>
+        <h2 style="margin:6px 0 10px;color:var(--navy)">Inicio Alumno</h2>
+        <p class="muted" style="margin:0 0 18px;font-size:0.92rem">Inicia sesion con Google para ver tu Credencial Digital QR, avisos de revision y actualizar tu contacto, o registra tu ficha medica.</p>
+      </div>
+      <div class="actions" style="flex-direction:column;align-items:stretch;gap:10px">
+        <button type="button" id="btn-google-login" class="btn-google" style="justify-content:center">${icon('google',20)}<span>Entrar con Google (Alumno)</span></button>
+        <button class="btn green" data-view="consultar_estado">${icon('fichas',16)} Consultar estado / Credencial QR</button>
+        <button class="btn secondary" data-view="alumno">Llenar nueva ficha medica</button>
+      </div>
+    </div>
+  `;
+
+  return frame(`
+    <main class="hero" style="max-width:1120px;margin:0 auto;padding:32px 18px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:28px">
+        <div style="max-width:620px">
+          <span class="eyebrow">Universidad Tecnologica de Gutierrez Zamora</span>
+          <h1 style="margin:8px 0 10px">Sistema de Atencion Medica<br><em>Universitaria (SAMU)</em></h1>
+          <p class="hero-desc" style="margin:0">Selecciona tu perfil para ingresar a la plataforma de salud universitaria de forma segura.</p>
+        </div>
+        <img class="hero-art" src="${logo}" alt="Samu, cocodrilo medico" style="max-width:160px">
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px">
+        ${studentCard}
+        ${nurseCard}
+      </div>
+    </main>
+  `,true);
 }
 
 function login(){
@@ -608,38 +650,41 @@ function login(){
       <div class="hero-grid">
         <div class="hero-left">
           <span class="eyebrow">Acceso autorizado · UTGZ</span>
-          <h1>Bienvenido<br><em>a Enfermería.</em></h1>
-          <p class="hero-desc">Expedientes clínicos, bitácora, canalizaciones e inventario en un solo lugar. Acceso exclusivo para el personal de salud de la universidad.</p>
-          <img src="${logo}" class="hero-art" alt="Samu" style="max-width:280px;margin:18px 0">
+          <h1>Inicio de Sesion<br><em>Enfermeria.</em></h1>
+          <p class="hero-desc">Expedientes clinicos, bitacora, canalizaciones e inventario en un solo lugar. Acceso exclusivo para el personal de salud de la universidad.</p>
+          <img src="${logo}" class="hero-art" alt="Samu" style="max-width:260px;margin:18px 0">
         </div>
         <section class="login-card">
-          <span class="eyebrow">Personal de Enfermería</span>
-          <h2>Iniciar sesión</h2>
-          <p class="muted" id="login-intro-text">Ingresa con tus credenciales de enfermería.</p>
+          <span class="eyebrow">Personal de Enfermeria</span>
+          <h2>Iniciar sesion</h2>
+          <p class="muted" id="login-intro-text">Accede con tu cuenta de Google o con correo y contrasena.</p>
 
           <div id="google-auth-container" style="display:none">
             <div style="margin:16px 0">
               <button type="button" class="btn-google" id="btn-google-login">
                 ${icon('google', 20)}
-                <span>Continuar con Google</span>
+                <span>Continuar con Google (Enfermeria)</span>
               </button>
             </div>
 
             <div class="login-divider">
-              <span>o ingresar con contraseña</span>
+              <span>o ingresar con correo y contrasena</span>
             </div>
           </div>
 
           <form id="login-form" class="form-grid" style="grid-template-columns:1fr">
-            ${bare('email','Correo electrónico de enfermería','email')}
-            ${bare('password','Contraseña','password')}
-            <button class="btn primary" type="submit">Iniciar sesión</button>
+            ${bare('email','Correo electronico de enfermeria','email')}
+            ${bare('password','Contrasena','password')}
+            <button class="btn primary" type="submit">Iniciar sesion</button>
             <p class="hint" id="login-hint-text">Acceso exclusivo para el personal de salud autorizado de la UTGZ.</p>
           </form>
 
           <hr class="divider">
-          <p class="muted">¿Eres estudiante?</p>
-          <button class="btn green" data-view="alumno" type="button">Llenar mi ficha médica (sin cuenta)</button>
+          <p class="muted" style="margin-bottom:10px">Eres estudiante?</p>
+          <div class="actions" style="flex-direction:column;align-items:stretch;gap:8px">
+            <button class="btn green" data-view="consultar_estado" type="button">Ir al Inicio de Alumno (Google / QR)</button>
+            <button class="btn secondary" data-view="alumno" type="button">Llenar nueva ficha medica</button>
+          </div>
         </section>
       </div>
     </main>
@@ -1542,6 +1587,33 @@ async function view(v){S.view=v;S.selectedId=null;const root=$('#app');if(!root)
    return;
  }
  if(v==='alumno'){root.innerHTML=student();setupSignatures();updateAge();history.replaceState({},'', '/alumno');return}
+ if(v==='consultar_estado'){
+   history.replaceState({},'', '/consultar-estado');
+   let saved=null;
+   try{const raw=sessionStorage.getItem('samu_student_data');if(raw)saved=JSON.parse(raw);}catch{}
+   if(saved && saved.qr_token){
+     window.currentStudentSession={student_id:saved.student_id,session_token:saved.session_token};
+     root.innerHTML=frame(`
+       <main class="student-container" style="max-width:700px;margin:30px auto;padding:0 15px">
+         <div class="student-lead">
+           <div><span class="eyebrow">Portal Estudiantil - UTGZ</span><h1>Hola, ${escapeHtml(saved.nombre_estudiante)}</h1><p class="muted">Credencial Digital SAMU y estado de ficha medica.</p></div>
+           <img src="${logo}" alt="Samu">
+         </div>
+         <div id="resultado-credencial-card">${renderCredencialCard(saved)}</div>
+         <div style="text-align:center;margin-top:16px">
+           <button type="button" class="btn secondary sm" id="btn-student-logout">Cerrar sesion de estudiante</button>
+         </div>
+       </main>`,true);
+     const c=$('#qrcode-container');
+     if(c){
+       if(window.QRCode){new QRCode(c,{text:saved.qr_token,width:170,height:170,colorDark:'#123424',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});}
+       else{c.innerHTML=`<img src="https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=${encodeURIComponent(saved.qr_token)}" alt="Codigo QR">`;}
+     }
+   }else{
+     root.innerHTML=consultarEstadoView();
+   }
+   return;
+ }
  if(!S.user){S.view='login';root.innerHTML=login();checkGoogleAuthConfig();return}
  const viewUrl = v==='dashboard'?'/enfermeria':`/${v}`;
  history.replaceState({},'', viewUrl);
@@ -1560,7 +1632,6 @@ async function view(v){S.view=v;S.selectedId=null;const root=$('#app');if(!root)
     html=inventario(S.rows);
   }
   if(v==='contactos'){S.contacts=await api('/api/contactos');html=contactos(S.contacts)}
-  if(v==='consultar_estado'){html=consultarEstadoView()}
   if(html){root.innerHTML=html;setupSignatures()}
  }catch(e){root.innerHTML=adminLayout(`<section class="paper"><div class="warning-banner">${escapeHtml(e.message)}</div><button class="btn secondary" data-view="dashboard">Volver al inicio</button></section>`,'Error','No se pudo cargar el módulo')}
 }
@@ -1679,24 +1750,11 @@ document.addEventListener('click',async e=>{
              data:{state:r.state,exchange_token:poll.exchange_token}
            });
            if(fin.role==='student'){
-             // Estudiante autenticado con Google: mostrar credencial directamente
+             // Estudiante autenticado con Google: guardar sesion temporal y mostrar credencial
              window.currentStudentSession={student_id:fin.student.student_id,session_token:fin.student.session_token};
-             const root=$('#app');
-             root.innerHTML=frame(`
-               <div class="student-container">
-                 <div class="student-lead">
-                   <div><span class="eyebrow">Credencial Digital SAMU</span><h1>Hola, ${escapeHtml(fin.student.nombre_estudiante)}</h1><p class="muted">Verificado con Google. Esta es tu credencial oficial SAMU UTGZ.</p></div>
-                   <img src="${logo}" alt="Samu">
-                 </div>
-                 <div id="resultado-credencial-card">${renderCredencialCard(fin.student)}</div>
-               </div>`,true);
-             if(window.QRCode){
-               new QRCode($('#qrcode-container'),{text:fin.student.qr_token,width:170,height:170,colorDark:'#123424',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
-             }else{
-               const c=$('#qrcode-container');if(c)c.innerHTML=`<img src="https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=${encodeURIComponent(fin.student.qr_token)}" alt="Codigo QR">`;
-             }
+             try{sessionStorage.setItem('samu_student_data',JSON.stringify(fin.student));}catch{}
              toast('Sesion iniciada con Google. Tu credencial esta lista.');
-             history.replaceState({},'','/consultar-estado');
+             await view('consultar_estado');
            }else{
              S.user=fin.user;
              S.csrf=fin.csrf;
@@ -1869,7 +1927,7 @@ document.addEventListener('click',async e=>{
    }catch(err){parseErr(err)}
    return;
  }
- if(t.id==='logout'){try{await api('/api/session/logout',{method:'POST'});S.user=null;S.csrf='';toast('Sesión cerrada');view('login')}catch(err){parseErr(err)}return}
+ if(t.id==='logout'){try{await api('/api/session/logout',{method:'POST'});S.user=null;S.csrf='';try{localStorage.removeItem('samu-cached-user');}catch{}toast('Sesion cerrada');view('inicio')}catch(err){parseErr(err)}return}
  if(t.id==='student-prev'){saveStep();S.step=Math.max(0,S.step-1);view('alumno');return}
  if(t.dataset.ficha){try{const a=await api(`/api/fichas/${t.dataset.ficha}`);$('#app').innerHTML=ficheDetail(a);S.view='fichas'}catch(err){parseErr(err)}return}
  if(t.id==='fichas-search'){try{const p=new URLSearchParams({q:$('#fichas-q').value,estado:$('#fichas-estado').value});S.rows=await api(`/api/fichas?${p}`);const q=$('#fichas-q').value,z=$('#fichas-estado').value;$('#app').innerHTML=fichas(S.rows);$('#fichas-q').value=q;$('#fichas-estado').value=z}catch(err){parseErr(err)}return}
@@ -1964,6 +2022,13 @@ document.addEventListener('click',async e=>{
     const p=document.getElementById(pmap[t.id]);if(p)p.style.display='block';
     return;
   }
+ if(t.id==='btn-student-logout'){
+   try{sessionStorage.removeItem('samu_student_data');}catch{}
+   window.currentStudentSession=null;
+   toast('Sesion de estudiante cerrada.');
+   view('consultar_estado');
+   return;
+ }
  if(t.id==='btn-sync-now'){syncPendingQueue();return}
  if(t.dataset.contactToggle){const a=S.contacts.find(r=>String(r.id)===t.dataset.contactToggle);if(!a)return;try{await api(`/api/contactos/${a.id}`,{method:'PUT',data:{...a,activo:!a.activo}});toast('Destinatario actualizado.');view('contactos')}catch(err){parseErr(err)}return}
  if(t.dataset.contactDelete){const a=S.contacts.find(r=>String(r.id)===t.dataset.contactDelete);if(!a)return;if(!confirm(`¿Deseas eliminar a "${a.nombre}" (${a.correo}) de la lista de destinatarios?`))return;try{const res=await api(`/api/contactos/${a.id}`,{method:'DELETE'});toast(res?.message||'Correo eliminado de la base de datos.');view('contactos')}catch(err){parseErr(err)}return}
@@ -1981,24 +2046,9 @@ document.addEventListener('submit',async e=>{
       data: { correo, codigo_verificacion: codigo }
     });
     if(!res.ok) throw Error('No se pudo consultar el estado.');
-    $('#estado-check-card').style.display = 'none';
-    const resCard = $('#resultado-credencial-card');
-    resCard.style.display = 'block';
-    resCard.innerHTML = renderCredencialCard(res);
-    // Generar código QR con la librería cliente QRCode
-    if(window.QRCode){
-      new QRCode($('#qrcode-container'), {
-        text: res.qr_token,
-        width: 170,
-        height: 170,
-        colorDark: '#123424',
-        colorLight: '#ffffff',
-        correctLevel: QRCode.CorrectLevel.M
-      });
-    } else {
-      $('#qrcode-container').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=${encodeURIComponent(res.qr_token)}" alt="Código QR">`;
-    }
-    toast('¡Identidad verificada! Credencial Digital generada.');
+    try{sessionStorage.setItem('samu_student_data',JSON.stringify(res));}catch{}
+    await view('consultar_estado');
+    toast('Identidad verificada. Credencial Digital generada.');
     return;
   }
   if(form.id==='form-cambiar-estado'){
@@ -2278,6 +2328,8 @@ document.addEventListener('drop',async e=>{
  renderOfflineStatus();
  const path = location.pathname;
  if(path === '/alumno') view('alumno');
+ else if(path === '/consultar-estado') view('consultar_estado');
+ else if(path === '/alertas') { if(S.user) view('alertas'); else view('login'); }
  else if(path === '/importar') { if(S.user) view('importar'); else view('login'); }
  else if(path === '/fichas') { if(S.user) view('fichas'); else view('login'); }
  else if(path === '/bitacora') { if(S.user) view('bitacora'); else view('login'); }

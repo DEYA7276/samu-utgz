@@ -75,7 +75,9 @@ def favicon():return FileResponse(STATIC/'assets/icon-192.png',media_type='image
 @app.get('/')
 @app.get('/login')
 @app.get('/alumno')
+@app.get('/consultar-estado')
 @app.get('/enfermeria')
+@app.get('/alertas')
 @app.get('/importar')
 @app.get('/dashboard')
 @app.get('/fichas')
@@ -178,15 +180,17 @@ def logout(response:Response,current=Depends(authenticated),db=Depends(db_sessio
     user,s=current; db.execute(__import__('sqlalchemy').delete(LoginSession).where(LoginSession.id==s.id));db.commit()
     response.delete_cookie(COOKIE,path='/');return {'ok':True}
 
-def render_oauth_success(name: str, token: str) -> str:
+def render_oauth_success(name: str, token: str, target_url: str = '/enfermeria', btn_label: str = 'Entrar al Panel de Enfermeria') -> str:
     from html import escape
     safe_name = escape(name)
+    safe_url = escape(target_url)
+    safe_label = escape(btn_label)
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Acceso Autorizado · SAMU UTGZ</title>
+  <title>Acceso Autorizado - SAMU UTGZ</title>
   <style>
     body {{ margin:0; padding:24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif; background:#f3f6f2; color:#17382b; display:flex; align-items:center; justify-content:center; min-height:85vh; }}
     .card {{ max-width:440px; width:100%; background:#fff; border-radius:18px; padding:36px 28px; text-align:center; box-shadow:0 10px 30px rgba(40,104,79,0.08); border:1px solid #dce5dc; }}
@@ -203,14 +207,15 @@ def render_oauth_success(name: str, token: str) -> str:
     <div class="icon">
       <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
     </div>
-    <h1>¡Autenticación exitosa!</h1>
+    <h1>Autenticacion exitosa</h1>
     <p>Bienvenida(o), <strong>{safe_name}</strong>. Tu cuenta de Google ha sido verificada.</p>
-    <a href="/enfermeria" class="btn" id="btn-continue">Entrar al Panel de Enfermería</a>
-    <p class="hint">Si abriste el inicio de sesión desde la aplicación móvil SAMU en tu celular, puedes regresar a ella; tu acceso se activó automáticamente.</p>
+    <a href="{safe_url}" class="btn" id="btn-continue">{safe_label}</a>
+    <p class="hint">Puedes regresar a la ventana principal; tu acceso se activo automaticamente.</p>
   </div>
   <script>
     setTimeout(function() {{
-      window.location.href = '/enfermeria';
+      try {{ if(window.opener && !window.opener.closed) window.close(); }} catch(e) {{}}
+      window.location.href = '{safe_url}';
     }}, 900);
   </script>
 </body>
@@ -463,7 +468,7 @@ async def google_auth_callback(code: str = None, state: str = None, error: str =
         audit(db, None, 'login_google_estudiante', hashlib.sha256(email.encode()).hexdigest(), student.id)
         db.commit()
 
-        return Response(content=render_oauth_success(student.nombre_aspirante or user_name, exchange_token), media_type='text/html')
+        return Response(content=render_oauth_success(student.nombre_aspirante or user_name, exchange_token, '/consultar-estado', 'Ver mi Credencial Digital'), media_type='text/html')
 
     # No es enfermera ni estudiante registrado
     audit(db, None, 'oauth_login_rechazado', hashlib.sha256(email.encode()).hexdigest(), None)
