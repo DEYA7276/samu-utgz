@@ -49,7 +49,7 @@ async def security_headers(request:Request,call_next):
     response.headers['X-Frame-Options']='DENY'
     response.headers['Referrer-Policy']='no-referrer'
     response.headers['Permissions-Policy']='camera=(self), microphone=(), geolocation=()'
-    response.headers['Content-Security-Policy']="default-src 'self'; img-src 'self' data: blob: https://*.googleusercontent.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://openidconnect.googleapis.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+    response.headers['Content-Security-Policy']="default-src 'self'; img-src 'self' data: blob: https://*.googleusercontent.com https://api.qrserver.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://openidconnect.googleapis.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
     if PROD: response.headers['Strict-Transport-Security']='max-age=31536000; includeSubDomains'
     if request.url.path.startswith('/api/') or request.url.path.startswith('/descargar/'):
         response.headers['Cache-Control']='no-store, private'
@@ -387,31 +387,90 @@ async def google_auth_callback(code: str = None, state: str = None, error: str =
         state_data['error_msg'] = 'El correo electrónico no está verificado en Google.'
         return Response(content=render_oauth_error('Tu cuenta de Google no tiene el correo electrónico verificado.', 'EMAIL_NOT_VERIFIED'), media_type='text/html', status_code=403)
 
-    # REGLA: Acceso exclusivo a personal de enfermería autorizado en SAMU
+    # Verificar primero si es personal de enfermería autorizado
     nurse = db.scalar(select(Nurse).where((Nurse.google_sub == sub) | (Nurse.email == email)))
-    if not nurse or not nurse.active:
-        audit(db, None, 'oauth_login_rechazado', hashlib.sha256(email.encode()).hexdigest(), None)
+    if nurse and nurse.active:
+        if not nurse.google_sub:
+            nurse.google_sub = sub
+            audit(db, nurse.id, 'vincular_google_sub', 'personal', nurse.id)
+            db.commit()
+
+        exchange_token = secrets.token_urlsafe(36)
+        state_data['status'] = 'authenticated'
+        state_data['exchange_token'] = exchange_token
+        state_data['user_id'] = nurse.id
+        state_data['role'] = 'nurse'
+        state_data['expires'] = now() + timedelta(seconds=90)
+
+        session = new_login(nurse, response)
+        audit(db, nurse.id, 'login_google_exitoso', 'personal', nurse.id)
         db.commit()
-        state_data['status'] = 'unauthorized'
-        state_data['error_msg'] = f'La cuenta {email} no está autorizada como personal de enfermería en SAMU.'
-        return Response(content=render_oauth_unauthorized(email), media_type='text/html', status_code=403)
 
-    if not nurse.google_sub:
-        nurse.google_sub = sub
-        audit(db, nurse.id, 'vincular_google_sub', 'personal', nurse.id)
+        return Response(content=render_oauth_success(nurse.name or user_name, exchange_token), media_type='text/html')
+
+    # Si no es enfermera, verificar si es estudiante con ficha registrada
+    student = db.scalar(select(Student).where(Student.email_verificacion == email).order_by(desc(Student.id)))
+    if student:
+        # Asegurar que tenga token QR
+        if not getattr(student, 'qr_token', None):
+            student.qr_token = secrets.token_urlsafe(24)
+
+        estado_normalizado = 'pendiente_revision' if student.estado in ('pendiente', 'pendiente_revision') else student.estado
+
+        avisos = []
+        if student.created:
+            avisos.append({'tipo': 'info', 'titulo': 'Ficha médica registrada', 'mensaje': 'Tu cuestionario clínico fue recibido con éxito en el sistema SAMU.', 'fecha': student.created.strftime('%Y-%m-%d %H:%M')})
+        if getattr(student, 'status_updated', None) and student.estado != 'pendiente_revision':
+            if student.estado == 'en_revision':
+                avisos.append({'tipo': 'proceso', 'titulo': 'Expediente en revisión médica', 'mensaje': 'El personal de Enfermería se encuentra revisando tus antecedentes de salud.', 'fecha': student.status_updated.strftime('%Y-%m-%d %H:%M')})
+            elif student.estado == 'requiere_correccion':
+                avisos.append({'tipo': 'alerta', 'titulo': 'Indicación de corrección requerida', 'mensaje': getattr(student, 'observaciones_correccion', '') or 'Favor de presentarte en Enfermería para aclarar datos de contacto.', 'fecha': student.status_updated.strftime('%Y-%m-%d %H:%M')})
+            elif student.estado == 'validada':
+                avisos.append({'tipo': 'exito', 'titulo': 'Ficha validada exitosamente', 'mensaje': 'Tu expediente médico ha sido validado formalmente por Enfermería.', 'fecha': student.status_updated.strftime('%Y-%m-%d %H:%M')})
+
+        session_token = secrets.token_urlsafe(32)
+        session_hash = hashlib.sha256(session_token.encode()).hexdigest()
+        audit(db, None, f'student_session_{student.id}', session_hash, student.id)
         db.commit()
 
-    exchange_token = secrets.token_urlsafe(36)
-    state_data['status'] = 'authenticated'
-    state_data['exchange_token'] = exchange_token
-    state_data['user_id'] = nurse.id
-    state_data['expires'] = now() + timedelta(seconds=90)
+        student_data = {
+            'ok': True,
+            'student_id': student.id,
+            'session_token': session_token,
+            'folio': student.folio,
+            'nombre_estudiante': student.nombre_aspirante,
+            'matricula': student.matricula or 'Pendiente de asignación',
+            'programa_educativo': (student.datos or {}).get('programa_educativo', 'UTGZ'),
+            'estado': estado_normalizado,
+            'observaciones_correccion': getattr(student, 'observaciones_correccion', '') or '',
+            'status_updated': student.status_updated.isoformat() if getattr(student, 'status_updated', None) else (student.created.isoformat() if student.created else None),
+            'qr_token': student.qr_token,
+            'telefono_personal': (student.datos or {}).get('telefono_celular', '') or (student.datos or {}).get('telefono_aspirante', ''),
+            'nombre_contacto_emergencia': (student.datos or {}).get('nombre_padre_tutor', ''),
+            'telefono_contacto_emergencia': (student.datos or {}).get('telefono_padre_tutor', ''),
+            'avisos': avisos,
+            'created': student.created.isoformat() if student.created else None
+        }
 
-    session = new_login(nurse, response)
-    audit(db, nurse.id, 'login_google_exitoso', 'personal', nurse.id)
+        import json as _json
+        exchange_token = secrets.token_urlsafe(36)
+        state_data['status'] = 'authenticated'
+        state_data['exchange_token'] = exchange_token
+        state_data['role'] = 'student'
+        state_data['student_data'] = student_data
+        state_data['expires'] = now() + timedelta(seconds=90)
+
+        audit(db, None, 'login_google_estudiante', hashlib.sha256(email.encode()).hexdigest(), student.id)
+        db.commit()
+
+        return Response(content=render_oauth_success(student.nombre_aspirante or user_name, exchange_token), media_type='text/html')
+
+    # No es enfermera ni estudiante registrado
+    audit(db, None, 'oauth_login_rechazado', hashlib.sha256(email.encode()).hexdigest(), None)
     db.commit()
-
-    return Response(content=render_oauth_success(nurse.name or user_name, exchange_token), media_type='text/html')
+    state_data['status'] = 'unauthorized'
+    state_data['error_msg'] = f'La cuenta {email} no tiene una ficha médica ni permisos de enfermería en SAMU.'
+    return Response(content=render_oauth_unauthorized(email), media_type='text/html', status_code=403)
 
 @app.get('/api/auth/google/poll-session')
 def poll_oauth_session(state: str):
@@ -422,12 +481,13 @@ def poll_oauth_session(state: str):
     if data['status'] == 'authenticated':
         return {
             'status': 'authenticated',
-            'exchange_token': data['exchange_token']
+            'exchange_token': data['exchange_token'],
+            'role': data.get('role', 'nurse')
         }
     if data['status'] == 'unauthorized':
         return {
             'status': 'unauthorized',
-            'detail': data.get('error_msg') or 'La cuenta seleccionada no tiene permisos de enfermería en SAMU.'
+            'detail': data.get('error_msg') or 'La cuenta seleccionada no tiene permisos en SAMU.'
         }
     if data['status'] == 'error':
         return {
@@ -453,7 +513,18 @@ def finalize_oauth_session(body: FinalizeSessionRequest, response: Response, db 
         bad('El token de intercambio ha expirado.', 401)
     
     user_id = state_data.get('user_id')
+    role = state_data.get('role', 'nurse')
+    student_data = state_data.get('student_data')
     OAUTH_STATES.pop(body.state, None)
+
+    # Sesión de estudiante: no crea sesión de servidor, devuelve datos directamente
+    if role == 'student' and student_data:
+        return {
+            'role': 'student',
+            'student': student_data
+        }
+
+    # Sesión de enfermería
     nurse = db.get(Nurse, user_id)
     if not nurse or not nurse.active:
         bad('Cuenta de enfermería deshabilitada.', 403)
@@ -462,6 +533,7 @@ def finalize_oauth_session(body: FinalizeSessionRequest, response: Response, db 
     audit(db, nurse.id, 'login_google_finalizado', 'personal', nurse.id)
     db.commit()
     return {
+        'role': 'nurse',
         'user': {'name': nurse.name, 'email': nurse.email, 'role': nurse.role},
         'csrf': session.csrf
     }
@@ -879,6 +951,27 @@ def dashboard(current=Depends(authenticated),db=Depends(db_session)):
         for s in db.scalars(select(Student).where(or_(Student.estado=='pendiente', Student.estado=='pendiente_revision', Student.estado=='en_revision', Student.estado=='requiere_correccion')).order_by(desc(Student.id)).limit(5)).all()
     ]
 
+    today_obj = datetime.now().date()
+    week_ago_str = (today_obj - timedelta(days=7)).strftime('%Y-%m-%d')
+    atenciones_semana = db.scalar(select(func.count(Attention.id)).where(Attention.fecha >= week_ago_str)) or 0
+
+    # Comparativa con mes anterior
+    prev_month = cur_month - 1
+    prev_year = cur_year
+    if prev_month <= 0:
+        prev_month = 12
+        prev_year -= 1
+    prev_month_str = f"{prev_year:04d}-{prev_month:02d}"
+    atenciones_mes_anterior = db.scalar(select(func.count(Attention.id)).where(Attention.fecha.like(f"{prev_month_str}-%"))) or 0
+
+    # Motivos frecuentes de consulta médica
+    motivos_count = {}
+    for att in db.scalars(select(Attention).order_by(desc(Attention.id)).limit(150)).all():
+        m = ((att.datos or {}).get('motivo_consulta') or '').strip().capitalize()
+        if m:
+            motivos_count[m] = motivos_count.get(m, 0) + 1
+    top_motivos = sorted([{'motivo': k, 'total': v} for k, v in motivos_count.items()], key=lambda x: x['total'], reverse=True)[:5]
+
     return {
         'pendientes': pendientes_revision,
         'en_revision': en_revision,
@@ -891,7 +984,11 @@ def dashboard(current=Depends(authenticated),db=Depends(db_session)):
         'insumos': total_insumos,
         'stock_bajo': stock_bajo_count,
         'atenciones_hoy': atenciones_hoy,
+        'atenciones_semana': atenciones_semana,
         'atenciones_mes': atenciones_mes,
+        'atenciones_mes_anterior': atenciones_mes_anterior,
+        'comparativa_mes_pct': round(((atenciones_mes - atenciones_mes_anterior) / max(1, atenciones_mes_anterior)) * 100, 1) if atenciones_mes_anterior > 0 else 0,
+        'top_motivos': top_motivos,
         'alumnos_atendidos_total': alumnos_atendidos_total,
         'alumnos_atendidos_mes': alumnos_atendidos_mes,
         'canalizaciones_mes': canalizaciones_mes,
@@ -1113,9 +1210,50 @@ def consultar_estado_alumno(d:dict,db=Depends(db_session)):
         
     estado_normalizado = 'pendiente_revision' if student.estado in ('pendiente', 'pendiente_revision') else student.estado
     
+    # Construcción de avisos para el estudiante según el historial de la ficha
+    avisos = []
+    if student.created:
+        avisos.append({
+            'tipo': 'info',
+            'titulo': 'Ficha médica registrada',
+            'mensaje': 'Tu cuestionario clínico fue recibido con éxito en el sistema SAMU.',
+            'fecha': student.created.strftime('%Y-%m-%d %H:%M')
+        })
+    if student.status_updated and student.estado != 'pendiente_revision':
+        if student.estado == 'en_revision':
+            avisos.append({
+                'tipo': 'proceso',
+                'titulo': 'Expediente en revisión médica',
+                'mensaje': 'El personal de Enfermería se encuentra revisando tus antecedentes de salud.',
+                'fecha': student.status_updated.strftime('%Y-%m-%d %H:%M')
+            })
+        elif student.estado == 'requiere_correccion':
+            avisos.append({
+                'tipo': 'alerta',
+                'titulo': 'Indicación de corrección requerida',
+                'mensaje': student.observaciones_correccion or 'Favor de presentarte en Enfermería para aclarar datos de contacto.',
+                'fecha': student.status_updated.strftime('%Y-%m-%d %H:%M')
+            })
+        elif student.estado == 'validada':
+            avisos.append({
+                'tipo': 'exito',
+                'titulo': 'Ficha validada exitosamente',
+                'mensaje': 'Tu expediente médico ha sido validado formalmente por Enfermería.',
+                'fecha': student.status_updated.strftime('%Y-%m-%d %H:%M')
+            })
+
+    # Token temporal de sesión para permitir actualización segura de datos de contacto
+    session_token = secrets.token_urlsafe(32)
+    session_hash = hashlib.sha256(session_token.encode()).hexdigest()
+    # Guardamos token efímero en auditoría temporal
+    audit(db, None, f'student_session_{student.id}', session_hash, student.id)
+    db.commit()
+
     # IMPORTANTE POR SEGURIDAD: La credencial/estado NO devuelve datos médicos sensibles (NSS, alergias, tipo de sangre, padecimientos)
     return {
         'ok': True,
+        'student_id': student.id,
+        'session_token': session_token,
         'folio': student.folio,
         'nombre_estudiante': student.nombre_aspirante,
         'matricula': student.matricula or 'Pendiente de asignación',
@@ -1124,8 +1262,46 @@ def consultar_estado_alumno(d:dict,db=Depends(db_session)):
         'observaciones_correccion': getattr(student, 'observaciones_correccion', '') or '',
         'status_updated': student.status_updated.isoformat() if getattr(student, 'status_updated', None) else (student.created.isoformat() if student.created else None),
         'qr_token': student.qr_token,
+        'telefono_personal': (student.datos or {}).get('telefono_celular', '') or (student.datos or {}).get('telefono_aspirante', ''),
+        'nombre_contacto_emergencia': (student.datos or {}).get('nombre_padre_tutor', ''),
+        'telefono_contacto_emergencia': (student.datos or {}).get('telefono_padre_tutor', ''),
+        'avisos': avisos,
         'created': student.created.isoformat() if student.created else None
     }
+
+@app.post('/api/alumnos/actualizar-datos')
+def actualizar_datos_estudiante(d:dict,db=Depends(db_session)):
+    student_id = int(d.get('student_id', 0))
+    token = clean(d, 'session_token', True, 64)
+    student = db.get(Student, student_id)
+    if not student: bad('Ficha de estudiante inexistente.', 404)
+    
+    # Validar token de sesión del estudiante
+    expected_hash = hashlib.sha256(token.encode()).hexdigest()
+    recent = now() - timedelta(minutes=30)
+    audit_rec = db.scalar(select(Audit).where(
+        Audit.accion == f'student_session_{student.id}',
+        Audit.entidad == expected_hash,
+        Audit.created >= recent
+    ))
+    if not audit_rec:
+        bad('Tu sesión de consulta ha expirado. Por favor solicita un nuevo código de verificación.', 401)
+        
+    tel_personal = clean(d, 'telefono_personal', False, 40)
+    nombre_contacto = clean(d, 'nombre_contacto_emergencia', True, 200)
+    tel_contacto = clean(d, 'telefono_contacto_emergencia', True, 40)
+    
+    # Actualizar únicamente datos de contacto de emergencia permitidos (sin tocar datos clínicos ni académicos)
+    datos = dict(student.datos or {})
+    datos['telefono_celular'] = tel_personal
+    datos['telefono_aspirante'] = tel_personal
+    datos['nombre_padre_tutor'] = nombre_contacto
+    datos['telefono_padre_tutor'] = tel_contacto
+    
+    student.datos = datos
+    audit(db, None, 'estudiante_actualizo_contacto', 'fichas_medicas', student.id)
+    db.commit()
+    return {'ok': True, 'mensaje': 'Datos de contacto de emergencia actualizados con éxito.'}
 
 @app.post('/api/fichas/{ident}/validar')
 def validate_ficha(ident:int,d:dict,current=Depends(authenticated),db=Depends(db_session)):

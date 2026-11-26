@@ -320,16 +320,25 @@ function consultarEstadoView(){
 
       <section class="paper" id="estado-check-card">
         <h2>Verificar identidad</h2>
-        <p class="hint">Por privacidad médica (NOM-004-SSA3), ingresa el correo que registraste en tu ficha para recibir un código OTP de acceso seguro.</p>
-        
-        <form id="form-consulta-otp">
-          <div class="form-grid" style="grid-template-columns:1fr">
-            ${bare('correo_consulta','Correo electrónico institucional o de contacto','email',{placeholder:'tu_correo@utgz.edu.mx'})}
-          </div>
-          <div class="actions" style="margin-top:15px">
-            <button type="button" class="btn primary" id="btn-pedir-otp-consulta">Enviar código a mi correo</button>
-          </div>
-        </form>
+        <p class="hint">Inicia sesión con tu cuenta Google institucional o verifica tu identidad mediante un código OTP enviado a tu correo registrado.</p>
+
+        <div style="margin:16px 0 22px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--paper)">
+          <strong style="display:block;margin-bottom:8px;color:var(--navy)">Acceso rápido con Google</strong>
+          <p class="hint" style="margin:0 0 12px">Si registraste tu ficha médica con tu correo de Google, accede directamente sin esperar código:</p>
+          <button type="button" id="btn-google-login" class="btn-google">${icon('google',20)}<span>Continuar con Google (Estudiante)</span></button>
+        </div>
+
+        <div style="border-top:1px solid var(--line);padding-top:18px">
+          <strong style="display:block;margin-bottom:8px;color:var(--navy)">O verificar con código por correo</strong>
+          <form id="form-consulta-otp">
+            <div class="form-grid" style="grid-template-columns:1fr">
+              ${bare('correo_consulta','Correo electrónico institucional o de contacto','email',{placeholder:'tu_correo@utgz.edu.mx'})}
+            </div>
+            <div class="actions" style="margin-top:15px">
+              <button type="button" class="btn primary" id="btn-pedir-otp-consulta">Enviar código a mi correo</button>
+            </div>
+          </form>
+        </div>
 
         <form id="form-verificar-consulta" style="display:none;margin-top:24px;border-top:1px solid var(--line);padding-top:20px">
           <div class="form-grid" style="grid-template-columns:1fr">
@@ -359,47 +368,108 @@ function renderCredencialCard(data){
     </div>
   ` : '';
 
+  const avisosHtml = (data.avisos||[]).map(av => `
+    <div style="border-left:4px solid var(--sea);padding:10px 14px;margin-bottom:10px;background:var(--paper);border-radius:0 10px 10px 0;text-align:left">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <strong style="color:var(--navy);font-size:0.9rem">${escapeHtml(av.titulo)}</strong>
+        <small style="color:var(--muted);font-size:0.75rem">${escapeHtml(av.fecha)}</small>
+      </div>
+      <p style="margin:4px 0 0;font-size:0.85rem;color:var(--navy2)">${escapeHtml(av.mensaje)}</p>
+    </div>
+  `).join('') || '<p class="hint">No hay avisos recientes.</p>';
+
+  // Guardar datos en sesión temporal del cliente
+  window.currentStudentSession = {
+    student_id: data.student_id,
+    session_token: data.session_token
+  };
+
   return `
-    <section class="paper" style="border:2px solid #28684f;border-radius:24px;overflow:hidden;box-shadow:0 12px 36px rgba(40,104,79,0.12);background:linear-gradient(180deg,#ffffff 0%,#f7faf8 100%)">
-      <div style="background:var(--navy);color:#fff;padding:20px;display:flex;align-items:center;justify-content:space-between">
-        <div style="display:flex;align-items:center;gap:12px">
-          <img src="${logo}" style="width:48px;height:48px;background:#fff;border-radius:50%;padding:4px" alt="SAMU">
+    <div class="filter-pills" style="justify-content:center;margin-bottom:18px">
+      <button type="button" class="filter-pill active" id="tab-student-credencial">Credencial Digital QR</button>
+      <button type="button" class="filter-pill" id="tab-student-avisos">Centro de Avisos (${(data.avisos||[]).length})</button>
+      <button type="button" class="filter-pill" id="tab-student-contacto">Actualizar mis Datos</button>
+    </div>
+
+    <!-- Pestaña 1: Credencial Digital QR -->
+    <div id="panel-student-credencial">
+      <section class="paper" style="border:2px solid #28684f;border-radius:24px;overflow:hidden;box-shadow:0 12px 36px rgba(40,104,79,0.12);background:linear-gradient(180deg,#ffffff 0%,#f7faf8 100%)">
+        <div style="background:var(--navy);color:#fff;padding:20px;display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:12px">
+            <img src="${logo}" style="width:48px;height:48px;background:#fff;border-radius:50%;padding:4px" alt="SAMU">
+            <div>
+              <h3 style="color:#fff;margin:0;font-size:1.15rem;letter-spacing:0.5px">CREDENCIAL DIGITAL SAMU</h3>
+              <span style="font-size:0.75rem;color:#b4d2bf;text-transform:uppercase">Universidad Tecnológica de Gutiérrez Zamora</span>
+            </div>
+          </div>
           <div>
-            <h3 style="color:#fff;margin:0;font-size:1.15rem;letter-spacing:0.5px">CREDENCIAL DIGITAL SAMU</h3>
-            <span style="font-size:0.75rem;color:#b4d2bf;text-transform:uppercase">Universidad Tecnológica de Gutiérrez Zamora</span>
+            ${badgeEstadoFicha(data.estado)}
           </div>
         </div>
-        <div>
-          ${badgeEstadoFicha(data.estado)}
+
+        <div style="padding:28px 24px;text-align:center">
+          <h2 style="font-size:1.45rem;color:var(--navy2);margin:0 0 6px">${escapeHtml(data.nombre_estudiante)}</h2>
+          <p class="muted" style="margin:0 0 16px;font-size:0.92rem">
+            Matrícula: <b>${escapeHtml(data.matricula)}</b> · Folio: <span style="font-family:monospace">${escapeHtml(data.folio)}</span>
+          </p>
+          <span class="chip" style="display:inline-block;margin-bottom:20px">${escapeHtml(data.programa_educativo)}</span>
+
+          ${obsHtml}
+
+          <div style="background:#fff;border:1.5px dashed var(--line);border-radius:18px;padding:20px;display:inline-block;margin:10px auto;box-shadow:0 4px 15px rgba(0,0,0,0.04)">
+            <div id="qrcode-container" style="display:flex;justify-content:center;margin:0 auto"></div>
+            <small style="display:block;margin-top:10px;color:var(--muted);font-size:0.75rem">Identificador seguro: ${escapeHtml(data.qr_token)}</small>
+          </div>
+
+          <p class="hint" style="max-width:440px;margin:18px auto 0;line-height:1.5">
+            <b>Seguridad médica:</b> Este código QR no contiene diagnósticos, alergias ni datos clínicos. Presenta esta credencial en la pantalla de tu celular al acudir al consultorio para que Enfermería escanee y abra tu expediente al instante.
+          </p>
+
+          <div class="actions" style="margin-top:22px;justify-content:center">
+            <button type="button" class="btn primary sm" onclick="window.print()">Imprimir o Guardar PDF</button>
+            <button type="button" class="btn secondary sm" data-view="inicio">Volver al inicio</button>
+          </div>
+
+          <small style="display:block;margin-top:14px;color:var(--muted);font-size:0.72rem">Última actualización de estado: ${fechaActualizacion}</small>
         </div>
-      </div>
+      </section>
+    </div>
 
-      <div style="padding:28px 24px;text-align:center">
-        <h2 style="font-size:1.45rem;color:var(--navy2);margin:0 0 6px">${escapeHtml(data.nombre_estudiante)}</h2>
-        <p class="muted" style="margin:0 0 16px;font-size:0.92rem">
-          Matrícula: <b>${escapeHtml(data.matricula)}</b> · Folio: <span style="font-family:monospace">${escapeHtml(data.folio)}</span>
-        </p>
-        <span class="chip" style="display:inline-block;margin-bottom:20px">${escapeHtml(data.programa_educativo)}</span>
-
-        ${obsHtml}
-
-        <div style="background:#fff;border:1.5px dashed var(--line);border-radius:18px;padding:20px;display:inline-block;margin:10px auto;box-shadow:0 4px 15px rgba(0,0,0,0.04)">
-          <div id="qrcode-container" style="display:flex;justify-content:center;margin:0 auto"></div>
-          <small style="display:block;margin-top:10px;color:var(--muted);font-size:0.75rem">Identificador seguro: ${escapeHtml(data.qr_token)}</small>
+    <!-- Pestaña 2: Centro de Avisos -->
+    <div id="panel-student-avisos" style="display:none">
+      <section class="paper">
+        <h2>Centro de Avisos del Estudiante</h2>
+        <p class="hint">Notificaciones y cambios de estado generados por el área de Enfermería de la UTGZ.</p>
+        <div style="margin-top:18px">
+          ${avisosHtml}
         </div>
+      </section>
+    </div>
 
-        <p class="hint" style="max-width:440px;margin:18px auto 0;line-height:1.5">
-          <b>Seguridad médica:</b> Este código QR no contiene diagnósticos, alergias ni datos clínicos. Presenta esta credencial en la pantalla de tu celular al acudir al consultorio para que Enfermería escanee y abra tu expediente al instante.
-        </p>
-
-        <div class="actions" style="margin-top:22px;justify-content:center">
-          <button type="button" class="btn primary sm" onclick="window.print()">Imprimir o Guardar PDF</button>
-          <button type="button" class="btn secondary sm" data-view="inicio">Volver al inicio</button>
-        </div>
-
-        <small style="display:block;margin-top:14px;color:var(--muted);font-size:0.72rem">Última actualización de estado: ${fechaActualizacion}</small>
-      </div>
-    </section>
+    <!-- Pestaña 3: Actualizar Datos de Contacto -->
+    <div id="panel-student-contacto" style="display:none">
+      <section class="paper">
+        <h2>Actualización Segura de Datos de Contacto</h2>
+        <p class="hint">Modifica tu teléfono de contacto y los datos de tu contacto de emergencia sin acudir a ventanilla.</p>
+        
+        <form id="form-actualizar-datos-estudiante">
+          <div class="form-grid">
+            <label class="field">Mi teléfono celular personal
+              <input type="tel" name="telefono_personal" value="${escapeHtml(data.telefono_personal||'')}" placeholder="Ej. 7661234567">
+            </label>
+            <label class="field">Nombre del contacto o tutor de emergencia
+              <input type="text" name="nombre_contacto_emergencia" value="${escapeHtml(data.nombre_contacto_emergencia||'')}" required>
+            </label>
+            <label class="field">Teléfono del contacto de emergencia
+              <input type="tel" name="telefono_contacto_emergencia" value="${escapeHtml(data.telefono_contacto_emergencia||'')}" required>
+            </label>
+          </div>
+          <div class="actions" style="margin-top:20px">
+            <button type="submit" class="btn green sm">Guardar cambios de contacto</button>
+          </div>
+        </form>
+      </section>
+    </div>
   `;
 }
 
@@ -674,6 +744,7 @@ function student(){return frame(`<div class="student-container"><div class="stud
 function menu(){
  let entries=[
    ['dashboard','dashboard','Inicio'],
+   ['alertas','alert-triangle','Centro de Alertas'],
    ['fichas','fichas','Fichas médicas'],
    ['importar','importar','Importar alumnos'],
    ['bitacora','bitacora','Bitácora'],
@@ -701,16 +772,97 @@ function medicalAlertsHtml(alerts){
   return `<div class="med-alert-box ${alerts.critico?'danger':'warning'}"><div class="med-alert-icon">${alerts.critico?icon('alert-triangle',22):icon('clipboard',22)}</div><div class="med-alert-body"><h4>Alertas médicas del estudiante</h4><p>${escapeHtml(alerts.mensaje)}</p>${alerts.alergias?.length?`<div style="margin-top:8px"><b>Alergias declaradas:</b><div class="med-tags">${alerts.alergias.map(a=>`<span class="med-tag danger"><span class="status-dot danger"></span>${escapeHtml(a.tipo)}: ${escapeHtml(a.detalle)}</span>`).join('')}</div></div>`:''}${alerts.cronicos?.length?`<div style="margin-top:8px"><b>Antecedentes / Condiciones crónicas:</b><div class="med-tags">${alerts.cronicos.map(c=>`<span class="med-tag warning"><span class="status-dot warning"></span>${escapeHtml(c.tipo)}: ${escapeHtml(c.detalle)}</span>`).join('')}</div></div>`:''}${alerts.contraindicados?.length?`<div style="margin-top:8px"><b>Medicamentos que NO se le deben administrar:</b><div class="med-tags">${alerts.contraindicados.map(m=>`<span class="med-tag danger"><span class="status-dot danger"></span>NO ADMINISTRAR: ${escapeHtml(m)}</span>`).join('')}</div></div>`:''}</div></div>`;
 }
 
+/* Centro de Alertas de Enfermeria */
+function alertasView(d){
+  const inv = d.inventario_alertas || {agotados:0,stock_bajo:0,por_caducar:0,caducados:0,total_alertas:0};
+  const fichasAlerta = d.fichas_recientes_revision || [];
+  const pendientes = d.pendientes_revision || 0;
+  const enRevision = d.en_revision || 0;
+  const requiere = d.requiere_correccion || 0;
+
+  function alertRow(prioridad, tipo, titulo, desc, boton, destino){
+    const cls = prioridad==='alta'?'danger': prioridad==='media'?'warning':'info';
+    const dot = prioridad==='alta'?'red': prioridad==='media'?'yellow':'green';
+    return `<div style="display:flex;align-items:flex-start;gap:14px;padding:14px 18px;border-bottom:1px solid var(--line);background:#fff">
+      <span class="status-dot ${dot}" style="margin-top:5px;flex-shrink:0"></span>
+      <div style="flex:1">
+        <strong style="font-size:0.95rem;color:var(--navy)">${escapeHtml(titulo)}</strong>
+        <p style="margin:3px 0 0;font-size:0.85rem;color:var(--navy2)">${escapeHtml(desc)}</p>
+      </div>
+      <span class="chip ${cls}" style="white-space:nowrap;font-size:0.75rem">${escapeHtml(tipo)}</span>
+      ${boton?`<button class="btn sm secondary" data-view="${destino}" style="flex-shrink:0">${escapeHtml(boton)}</button>`:''}
+    </div>`;
+  }
+
+  let altasRows='', mediasRows='', bajasRows='';
+
+  // Alta prioridad: agotados, caducados, fichas requieren correccion
+  if(inv.agotados>0) altasRows+=alertRow('alta','Inventario',`${inv.agotados} medicamento(s) agotado(s)`,'Insumo con existencia en cero. Requiere reposicion inmediata.','Ver inventario','inventario');
+  if(inv.caducados>0) altasRows+=alertRow('alta','Inventario',`${inv.caducados} insumo(s) caducado(s)`,'Productos fuera de fecha de uso. Deben retirarse del servicio.','Ver inventario','inventario');
+  if(requiere>0) altasRows+=alertRow('alta','Fichas medicas',`${requiere} ficha(s) requieren correccion de datos`,'El estudiante fue notificado de que debe actualizar su informacion de contacto.','Revisar fichas','fichas');
+
+  // Media prioridad: stock bajo, por caducar, pendientes revision
+  if(inv.stock_bajo>0) mediasRows+=alertRow('media','Inventario',`${inv.stock_bajo} medicamento(s) con stock bajo`,'Existencias inferiores al minimo recomendado. Programar compra.','Ver inventario','inventario');
+  if(inv.por_caducar>0) mediasRows+=alertRow('media','Inventario',`${inv.por_caducar} insumo(s) proximos a caducar (menos de 60 dias)`,'Revisar lote y fecha antes de administrar.','Ver inventario','inventario');
+  if(pendientes>0) mediasRows+=alertRow('media','Fichas medicas',`${pendientes} ficha(s) pendientes de revision`,'Nuevas fichas medicas de alumnos esperando validacion de Enfermeria.','Revisar fichas','fichas');
+
+  // Baja prioridad: en revision
+  if(enRevision>0) bajasRows+=alertRow('baja','Fichas medicas',`${enRevision} ficha(s) en proceso de revision`,'Fichas en revision activa. Sin accion urgente requerida.','Revisar fichas','fichas');
+
+  const totalAlertas = inv.total_alertas + pendientes + enRevision + requiere;
+
+  const seccion = (titulo, rows, cls) => rows ? `
+    <section class="paper" style="margin-top:14px">
+      <div class="section-title" style="border-left:4px solid ${cls==='alta'?'var(--danger,#c0392b)':cls==='media'?'#e67e22':'var(--sea)'};padding-left:12px">
+        <div>
+          <h2 style="margin:0;font-size:1rem">${titulo}</h2>
+        </div>
+      </div>
+      <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:10px">${rows}</div>
+    </section>` : '';
+
+  const noAlertas = !altasRows && !mediasRows && !bajasRows;
+
+  return adminLayout(`
+    <section class="paper">
+      <div class="section-title">
+        <div>
+          <h2>Centro de Alertas Administrativas</h2>
+          <p class="hint">Avisos agrupados por prioridad. ${totalAlertas>0?`${totalAlertas} alerta(s) activa(s).`:'Sin alertas activas en este momento.'}</p>
+        </div>
+        <div class="actions">
+          <button class="btn sm secondary" data-view="inventario">Ver inventario</button>
+          <button class="btn sm secondary" data-view="fichas">Ver fichas</button>
+        </div>
+      </div>
+      ${noAlertas?`<div class="empty" style="padding:40px 0"><p>No hay alertas activas en este momento. El sistema esta en orden.</p></div>`:''}
+    </section>
+    ${seccion('Prioridad alta — Requieren atencion inmediata', altasRows, 'alta')}
+    ${seccion('Prioridad media — Revisar a la brevedad', mediasRows, 'media')}
+    ${seccion('Prioridad baja — Informativo', bajasRows, 'baja')}
+    ${fichasAlerta.length>0?`
+    <section class="paper" style="margin-top:14px">
+      <div class="section-title">
+        <div><h2>Fichas recientes con estado pendiente</h2><p class="hint">Alumnos registrados recientemente que esperan revision.</p></div>
+        <button class="btn sm secondary" data-view="fichas">Ver todas</button>
+      </div>
+      ${table(['Folio','Estudiante','Matricula','Estado','Accion'],fichasAlerta.map(f=>`<tr><td><span style="font-family:monospace;font-weight:700">${escapeHtml(f.folio)}</span></td><td><b>${escapeHtml(f.nombre)}</b></td><td>${escapeHtml(f.matricula)}</td><td>${badgeEstadoFicha(f.estado)}</td><td><button class="btn sm secondary" data-ficha="${f.id}">Revisar</button></td></tr>`))}
+    </section>`:``}
+  `, 'Centro de Alertas', 'Alertas de inventario, fichas medicas y seguimiento administrativo');
+}
+
 /* Dashboard Inteligente de Enfermería */
 function dashboard(d){
   const inv = d.inventario_alertas || {agotados:0, stock_bajo:0, por_caducar:0, caducados:0, total_alertas:0};
+  const compPct = d.comparativa_mes_pct ?? 0;
+  const compLabel = compPct > 0 ? `+${compPct}% vs mes anterior` : compPct < 0 ? `${compPct}% vs mes anterior` : 'Igual que el mes anterior';
   const stats = [
-    ['Atenciones hoy', d.atenciones_hoy??0, true],
-    ['Atenciones del mes', d.atenciones_mes??0, false],
-    ['Pendientes de revisión', d.pendientes??0, (d.pendientes||0)>0],
-    ['En revisión médica', d.en_revision??0, false],
-    ['Requiere corrección', d.requiere_correccion??0, (d.requiere_correccion||0)>0],
-    ['Fichas validadas', d.validadas??0, false]
+    ['Atenciones hoy', d.atenciones_hoy??0, true, ''],
+    ['Esta semana', d.atenciones_semana??0, false, ''],
+    ['Atenciones del mes', d.atenciones_mes??0, false, compLabel],
+    ['Estudiantes atendidos', d.alumnos_atendidos_total??0, false, `${d.alumnos_atendidos_mes??0} este mes`],
+    ['Pendientes de revisión', d.pendientes??0, (d.pendientes||0)>0, `${d.requiere_correccion??0} requieren corrección`],
+    ['Canalizaciones pendientes', d.canalizaciones_pendientes??0, (d.canalizaciones_pendientes||0)>0, `${d.validadas??0} fichas validadas`]
   ];
 
   const maxGrafica = Math.max(1, ...(d.grafica_mensual||[]).map(g=>g.total));
@@ -718,6 +870,21 @@ function dashboard(d){
     const pct = Math.max(8, Math.round((g.total / maxGrafica) * 100));
     return `<div class="chart-col"><span class="chart-col-val">${g.total}</span><div class="chart-col-bar" style="height:${pct}%" title="${escapeHtml(g.label)}: ${g.total} atenciones"></div><span class="chart-col-lbl">${escapeHtml(g.label)}</span></div>`;
   }).join('');
+
+  const topMotivos = d.top_motivos || [];
+  const maxMotivo = Math.max(1, ...topMotivos.map(m=>m.total));
+  const motivosHtml = topMotivos.length ? topMotivos.map(m => {
+    const w = Math.max(10, Math.round((m.total / maxMotivo) * 100));
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:0.84rem;margin-bottom:4px">
+        <span style="color:var(--navy);font-weight:600">${escapeHtml(m.motivo)}</span>
+        <span style="color:var(--muted);font-weight:700">${m.total}</span>
+      </div>
+      <div style="background:var(--paper);border-radius:8px;height:10px;overflow:hidden">
+        <div style="width:${w}%;height:100%;background:var(--sea);border-radius:8px"></div>
+      </div>
+    </div>`;
+  }).join('') : '<p class="hint">Aún no hay suficientes registros para calcular motivos frecuentes.</p>';
 
   const alertBanner = inv.total_alertas > 0 ? `
     <div class="med-alert-box ${inv.agotados>0||inv.caducados>0?'danger':'warning'}">
@@ -732,7 +899,10 @@ function dashboard(d){
           ${inv.por_caducar>0?`<span class="med-tag warning"><span class="status-dot warning"></span>${inv.por_caducar} próximos a caducar (&lt;60 días)</span>`:''}
         </div>
       </div>
-      <button class="btn sm secondary" data-view="inventario" style="align-self:center">Ver inventario</button>
+      <div class="actions" style="align-self:center">
+        <button class="btn sm secondary" data-view="alertas">Centro de Alertas</button>
+        <button class="btn sm outline" data-view="inventario">Ver inventario</button>
+      </div>
     </div>` : '';
 
   const quickActions = `
@@ -783,10 +953,11 @@ function dashboard(d){
 
   return adminLayout(`
     <div class="stats" style="grid-template-columns:repeat(6,minmax(0,1fr))">
-      ${stats.map(([label, n, isAccent])=>`
+      ${stats.map(([label, n, isAccent, sub])=>`
         <div class="stat ${isAccent?'accent':''}">
           <small>${label}</small>
           <b>${n}</b>
+          ${sub?`<span style="display:block;font-size:0.72rem;color:var(--muted);margin-top:4px">${escapeHtml(sub)}</span>`:''}
         </div>`).join('')}
     </div>
 
@@ -826,15 +997,27 @@ function dashboard(d){
       </section>
     </div>
 
-    <section class="paper" style="margin-top:18px">
-      <div class="section-title">
-        <div>
-          <h2>Atenciones médicas mensuales</h2>
-          <p class="hint">Historial de consultas registradas en los últimos 6 meses</p>
+    <div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:18px;margin-top:18px" class="dash-split">
+      <section class="paper">
+        <div class="section-title">
+          <div>
+            <h2>Atenciones médicas mensuales</h2>
+            <p class="hint">Historial de consultas registradas en los últimos 6 meses</p>
+          </div>
         </div>
-      </div>
-      <div class="chart-bar-wrap">${chartHtml}</div>
-    </section>
+        <div class="chart-bar-wrap">${chartHtml}</div>
+      </section>
+
+      <section class="paper">
+        <div class="section-title">
+          <div>
+            <h2>Motivos de atención más frecuentes</h2>
+            <p class="hint">Principales causas de consulta registradas</p>
+          </div>
+        </div>
+        <div style="margin-top:10px">${motivosHtml}</div>
+      </section>
+    </div>
   `, 'Dashboard de Enfermería', 'Estadísticas en tiempo real, alertas y accesos rápidos');
 }
 
@@ -1495,10 +1678,31 @@ document.addEventListener('click',async e=>{
              method:'POST',
              data:{state:r.state,exchange_token:poll.exchange_token}
            });
-           S.user=fin.user;
-           S.csrf=fin.csrf;
-           toast(`Bienvenida(o), ${fin.user.name}`);
-           await view('dashboard');
+           if(fin.role==='student'){
+             // Estudiante autenticado con Google: mostrar credencial directamente
+             window.currentStudentSession={student_id:fin.student.student_id,session_token:fin.student.session_token};
+             const root=$('#app');
+             root.innerHTML=frame(`
+               <div class="student-container">
+                 <div class="student-lead">
+                   <div><span class="eyebrow">Credencial Digital SAMU</span><h1>Hola, ${escapeHtml(fin.student.nombre_estudiante)}</h1><p class="muted">Verificado con Google. Esta es tu credencial oficial SAMU UTGZ.</p></div>
+                   <img src="${logo}" alt="Samu">
+                 </div>
+                 <div id="resultado-credencial-card">${renderCredencialCard(fin.student)}</div>
+               </div>`,true);
+             if(window.QRCode){
+               new QRCode($('#qrcode-container'),{text:fin.student.qr_token,width:170,height:170,colorDark:'#123424',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
+             }else{
+               const c=$('#qrcode-container');if(c)c.innerHTML=`<img src="https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=${encodeURIComponent(fin.student.qr_token)}" alt="Codigo QR">`;
+             }
+             toast('Sesion iniciada con Google. Tu credencial esta lista.');
+             history.replaceState({},'','/consultar-estado');
+           }else{
+             S.user=fin.user;
+             S.csrf=fin.csrf;
+             toast(`Bienvenida(o), ${fin.user.name}`);
+             await view('dashboard');
+           }
          }else if(poll.status==='unauthorized'){
            clearInterval(pollInterval);
            try{if(authWindow&&!authWindow.closed)authWindow.close()}catch{}
@@ -1752,6 +1956,14 @@ document.addEventListener('click',async e=>{
    } catch(err){ parseErr(err); }
    return;
  }
+ if(t.id==='tab-student-credencial'||t.id==='tab-student-avisos'||t.id==='tab-student-contacto'){
+    ['tab-student-credencial','tab-student-avisos','tab-student-contacto'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.remove('active');});
+    ['panel-student-credencial','panel-student-avisos','panel-student-contacto'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+    t.classList.add('active');
+    const pmap={'tab-student-credencial':'panel-student-credencial','tab-student-avisos':'panel-student-avisos','tab-student-contacto':'panel-student-contacto'};
+    const p=document.getElementById(pmap[t.id]);if(p)p.style.display='block';
+    return;
+  }
  if(t.id==='btn-sync-now'){syncPendingQueue();return}
  if(t.dataset.contactToggle){const a=S.contacts.find(r=>String(r.id)===t.dataset.contactToggle);if(!a)return;try{await api(`/api/contactos/${a.id}`,{method:'PUT',data:{...a,activo:!a.activo}});toast('Destinatario actualizado.');view('contactos')}catch(err){parseErr(err)}return}
  if(t.dataset.contactDelete){const a=S.contacts.find(r=>String(r.id)===t.dataset.contactDelete);if(!a)return;if(!confirm(`¿Deseas eliminar a "${a.nombre}" (${a.correo}) de la lista de destinatarios?`))return;try{const res=await api(`/api/contactos/${a.id}`,{method:'DELETE'});toast(res?.message||'Correo eliminado de la base de datos.');view('contactos')}catch(err){parseErr(err)}return}
